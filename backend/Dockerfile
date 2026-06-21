@@ -61,10 +61,10 @@ COPY . .
 COPY healthcheck.sh /usr/local/bin/healthcheck.sh
 RUN chmod +x /usr/local/bin/healthcheck.sh
 
-# 创建必要的目录并设置权限
+# 创建必要的目录并设置权限（仅 chown 可写目录，避免 vendor 递归 chown 极慢）
 RUN mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs \
     && mkdir -p bootstrap/cache \
-    && chown -R www-data:www-data /var/www/html \
+    && chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
 EXPOSE 8000

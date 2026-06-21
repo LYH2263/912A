@@ -53,7 +53,7 @@
         </el-form-item>
         <el-form-item label="库存">
           <el-select v-model="filters.has_stock" placeholder="请选择" clearable style="width: 140px">
-            <el-option label="全部" :value="" />
+            <el-option label="全部" value="" />
             <el-option label="有库存" :value="1" />
             <el-option label="无库存" :value="0" />
           </el-select>

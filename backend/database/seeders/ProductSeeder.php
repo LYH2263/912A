@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\Supplier;
 use Illuminate\Database\Seeder;
 
 class ProductSeeder extends Seeder
@@ -14,6 +15,18 @@ class ProductSeeder extends Seeder
     public function run(): void
     {
         $categories = Category::query()->pluck('id', 'name');
+        $suppliers = Supplier::query()->pluck('id', 'name');
+
+        $supplierMap = [
+            '手机' => '深圳科技供应链有限公司',
+            '电脑' => '深圳科技供应链有限公司',
+            '男装' => '杭州优品服饰贸易公司',
+            '女装' => '杭州优品服饰贸易公司',
+            '厨房用品' => '上海家居生活采购中心',
+            '清洁收纳' => '上海家居生活采购中心',
+            '技术' => '北京文华图书发行站',
+            '文学' => '北京文华图书发行站',
+        ];
 
         $items = [
             // 手机
@@ -183,12 +196,15 @@ class ProductSeeder extends Seeder
 
         foreach ($items as $item) {
             $categoryId = $categories[$item['category']] ?? null;
+            $supplierName = $supplierMap[$item['category']] ?? null;
+            $supplierId = $supplierName ? ($suppliers[$supplierName] ?? null) : null;
 
             Product::updateOrCreate(
                 ['sku' => $item['sku']],
                 [
                     'name' => $item['name'],
                     'category_id' => $categoryId,
+                    'supplier_id' => $supplierId,
                     'description' => $item['description'],
                     'price' => $item['price'],
                     'cost_price' => $item['cost_price'],
