@@ -25,7 +25,7 @@ class ProductRepository
 
     public function paginate(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = Product::with(['category', 'supplier'])
+        $query = Product::with(['category', 'supplier', 'tags'])
             ->withCount('skus as sku_count')
             ->withMin('skus as min_price', 'price')
             ->withMax('skus as max_price', 'price')
@@ -41,6 +41,24 @@ class ProductRepository
 
         if (isset($filters['status'])) {
             $query->where('status', $filters['status']);
+        }
+
+        if (isset($filters['stock_status'])) {
+            $stockStatus = $filters['stock_status'];
+            if ($stockStatus === 'out_of_stock') {
+                $query->where('stock_quantity', 0);
+            } elseif ($stockStatus === 'low_stock') {
+                $query->whereRaw('stock_quantity > 0 AND stock_quantity <= low_stock_threshold');
+            } elseif ($stockStatus === 'in_stock') {
+                $query->whereRaw('stock_quantity > low_stock_threshold');
+            }
+        }
+
+        if (isset($filters['tag_ids']) && !empty($filters['tag_ids'])) {
+            $tagIds = is_array($filters['tag_ids']) ? $filters['tag_ids'] : explode(',', $filters['tag_ids']);
+            $query->whereHas('tags', function ($q) use ($tagIds) {
+                $q->whereIn('tags.id', $tagIds);
+            }, '=', count($tagIds));
         }
 
         if (isset($filters['search'])) {
@@ -171,5 +189,41 @@ class ProductRepository
     public function increaseSkuStock(ProductSku $sku, int $quantity): void
     {
         $sku->increment('stock_quantity', $quantity);
+    }
+
+    public function syncTags(Product $product, array $tagIds): void
+    {
+        $product->tags()->sync($tagIds);
+    }
+
+    public function attachTags(array $productIds, array $tagIds): int
+    {
+        $count = 0;
+        foreach ($productIds as $productId) {
+            $product = Product::find($productId);
+            if ($product) {
+                $product->tags()->syncWithoutDetaching($tagIds);
+                $count++;
+            }
+        }
+        return $count;
+    }
+
+    public function detachTags(array $productIds, array $tagIds): int
+    {
+        $count = 0;
+        foreach ($productIds as $productId) {
+            $product = Product::find($productId);
+            if ($product) {
+                $product->tags()->detach($tagIds);
+                $count++;
+            }
+        }
+        return $count;
+    }
+
+    public function findWithTags(int $id): ?Product
+    {
+        return Product::with(['category', 'supplier', 'specs.values', 'skus', 'tags'])->find($id);
     }
 }

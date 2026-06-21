@@ -59,6 +59,32 @@
                 <el-option label="售罄" value="sold_out" />
               </el-select>
             </el-form-item>
+            <el-form-item label="商品标签">
+              <el-select
+                v-model="selectedTagIds"
+                multiple
+                filterable
+                collapse-tags
+                collapse-tags-tooltip
+                placeholder="选择标签（可多选）"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="tag in allTags"
+                  :key="tag.id"
+                  :label="tag.name"
+                  :value="tag.id"
+                >
+                  <span class="tag-option">
+                    <span class="tag-color" :style="{ backgroundColor: tag.color }" />
+                    {{ tag.name }}
+                  </span>
+                </el-option>
+              </el-select>
+              <div class="tag-hint">
+                未找到合适的标签？<el-button type="primary" link @click="goToTagManager">前往管理标签</el-button>
+              </div>
+            </el-form-item>
           </el-tab-pane>
 
           <el-tab-pane label="规格与SKU" name="specs">
@@ -112,6 +138,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { productApi } from '@/api/modules/product'
 import { supplierApi } from '@/api/modules/supplier'
+import { tagApi } from '@/api/modules/tag'
 import SpecMatrixEditor from '@/components/product/SpecMatrixEditor.vue'
 
 const route = useRoute()
@@ -123,6 +150,8 @@ const activeTab = ref('basic')
 const enableSpecs = ref(false)
 const categories = ref([])
 const suppliers = ref([])
+const allTags = ref([])
+const selectedTagIds = ref([])
 
 const form = reactive({
   name: '',
@@ -166,6 +195,20 @@ const fetchSuppliers = async () => {
   }
 }
 
+const fetchAllTags = async () => {
+  try {
+    const res = await tagApi.getAllTags()
+    allTags.value = res.data
+  } catch (e) {
+    console.error('获取标签列表失败', e)
+  }
+}
+
+const goToTagManager = () => {
+  const routeData = router.resolve({ path: '/tags' })
+  window.open(routeData.href, '_blank')
+}
+
 const handleSubmit = async () => {
   if (!formRef.value) return
   
@@ -175,6 +218,8 @@ const handleSubmit = async () => {
       try {
         const submitData = { ...form }
         
+        submitData.tag_ids = selectedTagIds.value
+
         if (enableSpecs.value) {
           if (specData.specs.length === 0) {
             ElMessage.warning('请至少添加一个规格')
@@ -227,6 +272,10 @@ const loadProduct = async () => {
       const product = res.data
       Object.assign(form, product)
       
+      if (product.tags && product.tags.length > 0) {
+        selectedTagIds.value = product.tags.map((t) => t.id)
+      }
+
       if (product.specs && product.specs.length > 0) {
         enableSpecs.value = true
         specData.specs = product.specs.map((s) => ({
@@ -245,6 +294,7 @@ const loadProduct = async () => {
 
 onMounted(() => {
   fetchSuppliers()
+  fetchAllTags()
   loadProduct()
 })
 </script>
@@ -296,5 +346,24 @@ onMounted(() => {
 
 .no-spec-info {
   max-width: 600px;
+}
+
+.tag-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag-color {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.tag-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6b7280;
 }
 </style>

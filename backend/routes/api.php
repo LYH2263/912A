@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\ProductApiController;
 use App\Http\Controllers\Api\ReturnApiController;
 use App\Http\Controllers\Api\ReviewApiController;
 use App\Http\Controllers\Api\SupplierApiController;
+use App\Http\Controllers\Api\TagApiController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -37,6 +38,12 @@ Route::prefix('api')->group(function () {
         // 商品 API
         Route::apiResource('products', ProductApiController::class);
         Route::get('products/{product}/inventory', [ProductApiController::class, 'show']);
+        Route::post('products/batch/attach-tags', [ProductApiController::class, 'batchAttachTags']);
+        Route::post('products/batch/detach-tags', [ProductApiController::class, 'batchDetachTags']);
+
+        // 标签 API
+        Route::get('tags/all', [TagApiController::class, 'all']);
+        Route::apiResource('tags', TagApiController::class);
 
         // 订单 API
         Route::apiResource('orders', OrderApiController::class);

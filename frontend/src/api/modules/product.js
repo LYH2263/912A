@@ -45,4 +45,20 @@ export const productApi = {
       method: 'get',
     })
   },
+
+  batchAttachTags(data) {
+    return request({
+      url: '/products/batch/attach-tags',
+      method: 'post',
+      data,
+    })
+  },
+
+  batchDetachTags(data) {
+    return request({
+      url: '/products/batch/detach-tags',
+      method: 'post',
+      data,
+    })
+  },
 }

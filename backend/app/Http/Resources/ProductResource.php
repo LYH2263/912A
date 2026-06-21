@@ -43,6 +43,15 @@ class ProductResource extends JsonResource
             'min_price' => $this->min_price,
             'max_price' => $this->max_price,
             'has_specs' => $this->has_specs,
+            'tags' => $this->whenLoaded('tags', function () {
+                return $this->tags->map(function ($tag) {
+                    return [
+                        'id' => $tag->id,
+                        'name' => $tag->name,
+                        'color' => $tag->color,
+                    ];
+                });
+            }),
             'specs' => $this->whenLoaded('specs', function () {
                 return $this->specs->map(function ($spec) {
                     return [

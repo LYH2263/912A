@@ -58,6 +58,11 @@ const routes = [
         component: () => import('../views/suppliers/SupplierForm.vue'),
       },
       {
+        path: 'tags',
+        name: 'Tags',
+        component: () => import('../views/tags/TagList.vue'),
+      },
+      {
         path: 'orders',
         name: 'Orders',
         component: () => import('../views/orders/OrderList.vue'),

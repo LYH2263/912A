@@ -20,7 +20,8 @@ class ProductService
         return DB::transaction(function () use ($data) {
             $specs = $data['specs'] ?? [];
             $skus = $data['skus'] ?? [];
-            unset($data['specs'], $data['skus']);
+            $tagIds = $data['tag_ids'] ?? [];
+            unset($data['specs'], $data['skus'], $data['tag_ids']);
 
             if (empty($skus)) {
                 if ($this->repository->existsBySku($data['sku'])) {
@@ -47,7 +48,11 @@ class ProductService
                 $this->repository->saveSkus($product, $skus);
             }
 
-            return $this->repository->findWithSpecs($product->id);
+            if (!empty($tagIds)) {
+                $this->repository->syncTags($product, $tagIds);
+            }
+
+            return $this->repository->findWithTags($product->id);
         });
     }
 
@@ -56,7 +61,8 @@ class ProductService
         return DB::transaction(function () use ($product, $data) {
             $specs = $data['specs'] ?? null;
             $skus = $data['skus'] ?? null;
-            unset($data['specs'], $data['skus']);
+            $tagIds = $data['tag_ids'] ?? null;
+            unset($data['specs'], $data['skus'], $data['tag_ids']);
 
             if (isset($data['sku']) && $this->repository->existsBySku($data['sku'], $product->id)) {
                 throw new \Exception('SKU 已存在，请使用其他 SKU');
@@ -91,7 +97,11 @@ class ProductService
                 $this->repository->saveSkus($product, $skus);
             }
 
-            return $this->repository->findWithSpecs($product->id);
+            if ($tagIds !== null) {
+                $this->repository->syncTags($product, $tagIds);
+            }
+
+            return $this->repository->findWithTags($product->id);
         });
     }
 
@@ -112,6 +122,6 @@ class ProductService
 
     public function getProductWithSpecs(int $id): ?Product
     {
-        return $this->repository->findWithSpecs($id);
+        return $this->repository->findWithTags($id);
     }
 }

@@ -19,7 +19,11 @@ class ProductApiController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $filters = $request->only(['category_id', 'supplier_id', 'status', 'search']);
+        $filters = $request->only(['category_id', 'supplier_id', 'status', 'stock_status', 'search']);
+        if ($request->has('tag_ids')) {
+            $tagIds = $request->input('tag_ids');
+            $filters['tag_ids'] = is_array($tagIds) ? $tagIds : explode(',', $tagIds);
+        }
         $perPage = $request->get('per_page', 15);
 
         $products = $this->repository->paginate($filters, $perPage);
@@ -68,6 +72,8 @@ class ProductApiController extends Controller
             'skus.*.image' => 'nullable|string|max:255',
             'skus.*.spec_data' => 'nullable|array',
             'skus.*.status' => 'nullable|in:active,inactive',
+            'tag_ids' => 'nullable|array',
+            'tag_ids.*' => 'exists:tags,id',
         ]);
 
         try {
@@ -107,6 +113,8 @@ class ProductApiController extends Controller
             'skus.*.image' => 'nullable|string|max:255',
             'skus.*.spec_data' => 'nullable|array',
             'skus.*.status' => 'nullable|in:active,inactive',
+            'tag_ids' => 'nullable|array',
+            'tag_ids.*' => 'exists:tags,id',
         ]);
 
         try {
@@ -122,6 +130,46 @@ class ProductApiController extends Controller
         try {
             $this->service->delete($product);
             return response()->json(['message' => '商品删除成功']);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+    }
+
+    public function batchAttachTags(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'product_ids' => 'required|array|min:1',
+            'product_ids.*' => 'exists:products,id',
+            'tag_ids' => 'required|array|min:1',
+            'tag_ids.*' => 'exists:tags,id',
+        ]);
+
+        try {
+            $count = $this->repository->attachTags($validated['product_ids'], $validated['tag_ids']);
+            return response()->json([
+                'message' => '批量打标成功',
+                'affected_count' => $count,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+    }
+
+    public function batchDetachTags(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'product_ids' => 'required|array|min:1',
+            'product_ids.*' => 'exists:products,id',
+            'tag_ids' => 'required|array|min:1',
+            'tag_ids.*' => 'exists:tags,id',
+        ]);
+
+        try {
+            $count = $this->repository->detachTags($validated['product_ids'], $validated['tag_ids']);
+            return response()->json([
+                'message' => '批量去标成功',
+                'affected_count' => $count,
+            ]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         }

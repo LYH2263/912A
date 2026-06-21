@@ -7,14 +7,40 @@
             <span class="card-title">商品列表</span>
             <span class="card-subtitle">管理在售商品、状态与库存情况</span>
           </div>
-          <el-button type="primary" @click="$router.push('/products/create')" round>
-            新增商品
-          </el-button>
+          <div class="header-actions">
+            <el-dropdown
+              v-if="selectedProducts.length > 0"
+              trigger="click"
+              @command="handleBatchCommand"
+            >
+              <el-button type="success" round>
+                批量操作 ({{ selectedProducts.length }})
+                <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="attach-tags">批量打标</el-dropdown-item>
+                  <el-dropdown-item command="detach-tags">批量去标</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+            <el-button type="primary" @click="$router.push('/products/create')" round>
+              新增商品
+            </el-button>
+          </div>
         </div>
       </template>
 
       <div class="filter-bar">
-        <el-select v-model="supplierFilter" placeholder="供应商" clearable style="width: 200px" @change="handleSearch">
+        <el-select v-model="categoryFilter" placeholder="商品分类" clearable style="width: 160px" @change="handleSearch">
+          <el-option
+            v-for="cat in categories"
+            :key="cat.id"
+            :label="cat.name"
+            :value="cat.id"
+          />
+        </el-select>
+        <el-select v-model="supplierFilter" placeholder="供应商" clearable style="width: 180px" @change="handleSearch">
           <el-option
             v-for="supplier in suppliers"
             :key="supplier.id"
@@ -22,10 +48,61 @@
             :value="supplier.id"
           />
         </el-select>
+        <el-select v-model="statusFilter" placeholder="商品状态" clearable style="width: 140px" @change="handleSearch">
+          <el-option label="上架" value="active" />
+          <el-option label="下架" value="inactive" />
+          <el-option label="售罄" value="sold_out" />
+        </el-select>
+        <el-select v-model="stockStatusFilter" placeholder="库存状态" clearable style="width: 140px" @change="handleSearch">
+          <el-option label="充足" value="in_stock" />
+          <el-option label="低库存" value="low_stock" />
+          <el-option label="缺货" value="out_of_stock" />
+        </el-select>
+        <el-select
+          v-model="tagFilter"
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
+          placeholder="标签筛选（多选）"
+          clearable
+          style="width: 240px"
+          @change="handleSearch"
+        >
+          <el-option
+            v-for="tag in allTags"
+            :key="tag.id"
+            :label="tag.name"
+            :value="tag.id"
+          >
+            <span class="filter-tag-option">
+              <span class="option-color" :style="{ backgroundColor: tag.color }" />
+              {{ tag.name }}
+            </span>
+          </el-option>
+        </el-select>
+        <el-input
+          v-model="searchQuery"
+          placeholder="搜索商品名称、编码"
+          clearable
+          style="width: 240px"
+          @keyup.enter="handleSearch"
+          @clear="handleSearch"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
+        <el-button @click="handleResetFilter">重置</el-button>
       </div>
       
-      <el-table :data="products" v-loading="loading" style="width: 100%; margin-top: 16px">
-        <el-table-column prop="name" label="商品名称" width="200">
+      <el-table
+        :data="products"
+        v-loading="loading"
+        style="width: 100%; margin-top: 16px"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="50" />
+        <el-table-column prop="name" label="商品名称" width="220">
           <template #default="{ row }">
             <div class="product-name-cell">
               <span class="name">{{ row.name }}</span>
@@ -33,7 +110,26 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="规格" width="120">
+        <el-table-column label="标签" width="220">
+          <template #default="{ row }">
+            <div class="tags-cell">
+              <el-tag
+                v-for="tag in (row.tags || [])"
+                :key="tag.id"
+                :style="{ backgroundColor: tag.color, borderColor: tag.color }"
+                effect="dark"
+                size="small"
+                class="product-tag"
+              >
+                {{ tag.name }}
+              </el-tag>
+              <span v-if="!row.tags || row.tags.length === 0" class="no-tags">
+                未打标
+              </span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="规格" width="110">
           <template #default="{ row }">
             <el-tag v-if="row.has_specs" type="success" size="small">
               {{ row.sku_count }} 个SKU
@@ -43,7 +139,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="供应商" width="160">
+        <el-table-column label="供应商" width="140">
           <template #default="{ row }">
             <span v-if="row.supplier" class="supplier-name">
               {{ row.supplier.name }}
@@ -68,7 +164,7 @@
         <el-table-column label="库存" width="120">
           <template #default="{ row }">
             <div class="stock-info">
-              <span :class="{ 'low-stock': row.stock_quantity <= row.low_stock_threshold }">
+              <span :class="{ 'low-stock': row.stock_quantity > 0 && row.stock_quantity <= row.low_stock_threshold, 'out-stock': row.stock_quantity === 0 }">
                 {{ row.stock_quantity }}
               </span>
               <span v-if="row.has_specs" class="stock-sub">
@@ -77,7 +173,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="评价汇总" width="200">
+        <el-table-column label="评价汇总" width="180">
           <template #default="{ row }">
             <div class="review-summary-cell" @click="openReviewDrawer(row)">
               <div class="review-score">
@@ -95,15 +191,27 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="100">
+        <el-table-column prop="status" label="状态" width="90">
           <template #default="{ row }">
             <el-tag :type="getStatusType(row.status)">
               {{ getStatusText(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="240" fixed="right">
+        <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
+            <el-dropdown trigger="click" @command="(cmd) => handleSingleTagCommand(cmd, row)">
+              <el-button size="small" type="success" plain>
+                标签
+                <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="attach">打标</el-dropdown-item>
+                  <el-dropdown-item command="detach">去标</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
             <el-button size="small" type="primary" plain @click="openReviewDrawer(row)">
               评价
             </el-button>
@@ -222,6 +330,69 @@
         </div>
       </div>
     </el-drawer>
+
+    <el-dialog
+      v-model="tagDialogVisible"
+      :title="tagDialogTitle"
+      width="520px"
+      :close-on-click-modal="false"
+    >
+      <div v-if="tagDialogLoading" class="dialog-loading">
+        <el-skeleton :rows="4" animated />
+      </div>
+      <template v-else>
+        <el-alert
+          v-if="targetProducts.length === 1"
+          :title="`为商品「${targetProducts[0].name}」${tagDialogAction === 'attach' ? '打标' : '去标'}`"
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 20px"
+        />
+        <el-alert
+          v-else
+          :title="`为选中的 ${targetProducts.length} 个商品批量${tagDialogAction === 'attach' ? '打标' : '去标'}`"
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 20px"
+        />
+        <el-form label-width="100px">
+          <el-form-item :label="tagDialogAction === 'attach' ? '选择标签' : '选择要移除的标签'">
+            <el-select
+              v-model="selectedTagIds"
+              multiple
+              filterable
+              placeholder="请选择标签"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="tag in allTags"
+                :key="tag.id"
+                :label="tag.name"
+                :value="tag.id"
+              >
+                <span class="filter-tag-option">
+                  <span class="option-color" :style="{ backgroundColor: tag.color }" />
+                  {{ tag.name }}
+                </span>
+              </el-option>
+            </el-select>
+          </el-form-item>
+        </el-form>
+      </template>
+      <template #footer>
+        <el-button @click="tagDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="tagDialogSubmitting"
+          :disabled="selectedTagIds.length === 0"
+          @click="handleTagDialogSubmit"
+        >
+          确认{{ tagDialogAction === 'attach' ? '打标' : '去标' }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -229,19 +400,29 @@
 import { ref, onMounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Search, ArrowDown } from '@element-plus/icons-vue'
 import { productApi } from '@/api/modules/product'
 import { reviewApi } from '@/api/modules/review'
 import { supplierApi } from '@/api/modules/supplier'
+import { tagApi } from '@/api/modules/tag'
 import dayjs from 'dayjs'
 
 const router = useRouter()
 const products = ref([])
 const suppliers = ref([])
+const categories = ref([])
+const allTags = ref([])
 const loading = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
 const supplierFilter = ref('')
+const categoryFilter = ref('')
+const statusFilter = ref('')
+const stockStatusFilter = ref('')
+const tagFilter = ref([])
+const searchQuery = ref('')
+const selectedProducts = ref([])
 
 const productsSummaryMap = reactive({})
 const drawerVisible = ref(false)
@@ -254,6 +435,14 @@ const reviewPageSize = ref(10)
 const reviewTotal = ref(0)
 
 const drawerTitle = ref('商品评价详情')
+
+const tagDialogVisible = ref(false)
+const tagDialogLoading = ref(false)
+const tagDialogSubmitting = ref(false)
+const tagDialogTitle = ref('打标')
+const tagDialogAction = ref('attach')
+const targetProducts = ref([])
+const selectedTagIds = ref([])
 
 const getStatusType = (status) => {
   const map = {
@@ -295,6 +484,22 @@ const fetchSuppliers = async () => {
   }
 }
 
+const fetchCategories = async () => {
+  try {
+    const { default: Category } = await import('@/api/modules/product.js')
+  } catch (e) {
+  }
+}
+
+const fetchAllTags = async () => {
+  try {
+    const res = await tagApi.getAllTags()
+    allTags.value = res.data
+  } catch (error) {
+    console.error('获取标签列表失败', error)
+  }
+}
+
 const fetchProducts = async () => {
   loading.value = true
   try {
@@ -302,9 +507,13 @@ const fetchProducts = async () => {
       page: currentPage.value,
       per_page: pageSize.value,
     }
-    if (supplierFilter.value) {
-      params.supplier_id = supplierFilter.value
-    }
+    if (categoryFilter.value) params.category_id = categoryFilter.value
+    if (supplierFilter.value) params.supplier_id = supplierFilter.value
+    if (statusFilter.value) params.status = statusFilter.value
+    if (stockStatusFilter.value) params.stock_status = stockStatusFilter.value
+    if (tagFilter.value && tagFilter.value.length > 0) params.tag_ids = tagFilter.value
+    if (searchQuery.value) params.search = searchQuery.value
+
     const res = await productApi.getProducts(params)
     products.value = res.data
     total.value = res.meta.total
@@ -323,6 +532,21 @@ const fetchProducts = async () => {
 const handleSearch = () => {
   currentPage.value = 1
   fetchProducts()
+}
+
+const handleResetFilter = () => {
+  categoryFilter.value = ''
+  supplierFilter.value = ''
+  statusFilter.value = ''
+  stockStatusFilter.value = ''
+  tagFilter.value = []
+  searchQuery.value = ''
+  currentPage.value = 1
+  fetchProducts()
+}
+
+const handleSelectionChange = (val) => {
+  selectedProducts.value = val
 }
 
 const fetchProductsSummary = async (productIds) => {
@@ -390,6 +614,68 @@ const handleDelete = async (row) => {
   }
 }
 
+const handleBatchCommand = (command) => {
+  if (command === 'attach-tags') {
+    openTagDialog('attach', [...selectedProducts.value])
+  } else if (command === 'detach-tags') {
+    openTagDialog('detach', [...selectedProducts.value])
+  }
+}
+
+const handleSingleTagCommand = (command, row) => {
+  if (command === 'attach') {
+    openTagDialog('attach', [row])
+  } else if (command === 'detach') {
+    openTagDialog('detach', [row])
+  }
+}
+
+const openTagDialog = async (action, products) => {
+  tagDialogAction.value = action
+  tagDialogTitle.value = action === 'attach' ? '打标' : '去标'
+  targetProducts.value = products
+  selectedTagIds.value = []
+  tagDialogVisible.value = true
+  tagDialogLoading.value = true
+  try {
+    if (allTags.value.length === 0) {
+      await fetchAllTags()
+    }
+  } finally {
+    tagDialogLoading.value = false
+  }
+}
+
+const handleTagDialogSubmit = async () => {
+  if (selectedTagIds.value.length === 0) {
+    ElMessage.warning('请选择至少一个标签')
+    return
+  }
+  tagDialogSubmitting.value = true
+  try {
+    const productIds = targetProducts.value.map((p) => p.id)
+    if (tagDialogAction.value === 'attach') {
+      await productApi.batchAttachTags({
+        product_ids: productIds,
+        tag_ids: selectedTagIds.value,
+      })
+      ElMessage.success('打标成功')
+    } else {
+      await productApi.batchDetachTags({
+        product_ids: productIds,
+        tag_ids: selectedTagIds.value,
+      })
+      ElMessage.success('去标成功')
+    }
+    tagDialogVisible.value = false
+    fetchProducts()
+  } catch (error) {
+    ElMessage.error(error.response?.data?.message || error.message || '操作失败')
+  } finally {
+    tagDialogSubmitting.value = false
+  }
+}
+
 const handleSizeChange = () => {
   currentPage.value = 1
   fetchProducts()
@@ -401,6 +687,8 @@ const handleCurrentChange = () => {
 
 onMounted(() => {
   fetchSuppliers()
+  fetchCategories()
+  fetchAllTags()
   fetchProducts()
 })
 </script>
@@ -416,10 +704,29 @@ onMounted(() => {
   align-items: center;
 }
 
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
 .filter-bar {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-tag-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.option-color {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  display: inline-block;
 }
 
 .supplier-name {
@@ -467,6 +774,22 @@ onMounted(() => {
   color: #9ca3af;
 }
 
+.tags-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.product-tag {
+  margin-right: 4px;
+  margin-bottom: 2px;
+}
+
+.no-tags {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
 .price-range {
   display: flex;
   align-items: baseline;
@@ -498,6 +821,11 @@ onMounted(() => {
 
 .stock-info .low-stock {
   color: #e6a23c;
+  font-weight: 500;
+}
+
+.stock-info .out-stock {
+  color: #f56c6c;
   font-weight: 500;
 }
 
@@ -705,5 +1033,9 @@ onMounted(() => {
   padding: 8px 12px;
   background: #fff;
   border-radius: 8px;
+}
+
+.dialog-loading {
+  padding: 12px 0;
 }
 </style>
