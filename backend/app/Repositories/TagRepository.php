@@ -21,7 +21,28 @@ class TagRepository
 
     public function delete(Tag $tag): ?bool
     {
+        // 手动清除多对多关联（软删除不会触发外键级联）
+        $tag->products()->detach();
+
         return $tag->delete();
+    }
+
+    /**
+     * 按名称查询（包含已软删除的）
+     */
+    public function findByNameWithTrashed(string $name): ?Tag
+    {
+        return Tag::withTrashed()->where('name', $name)->first();
+    }
+
+    /**
+     * 复活已软删除的标签，并更新其他字段
+     */
+    public function restoreAndUpdate(Tag $tag, array $data): Tag
+    {
+        $tag->restore();
+        $tag->update($data);
+        return $tag->fresh();
     }
 
     public function paginate(array $filters = [], int $perPage = 15): LengthAwarePaginator

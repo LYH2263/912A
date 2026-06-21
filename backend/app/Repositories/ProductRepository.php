@@ -59,7 +59,7 @@ class ProductRepository
             $tagIds = is_array($filters['tag_ids']) ? $filters['tag_ids'] : explode(',', $filters['tag_ids']);
             $query->whereHas('tags', function ($q) use ($tagIds) {
                 $q->whereIn('tags.id', $tagIds);
-            }, '=', count($tagIds));
+            });
         }
 
         if (isset($filters['search'])) {

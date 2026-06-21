@@ -363,11 +363,12 @@
               v-model="selectedTagIds"
               multiple
               filterable
-              placeholder="请选择标签"
+              :placeholder="tagDialogAction === 'attach' ? '请选择要添加的标签' : '请选择要移除的标签'"
               style="width: 100%"
+              :disabled="tagDialogAction === 'detach' && dialogTagOptions.length === 0"
             >
               <el-option
-                v-for="tag in allTags"
+                v-for="tag in dialogTagOptions"
                 :key="tag.id"
                 :label="tag.name"
                 :value="tag.id"
@@ -378,6 +379,12 @@
                 </span>
               </el-option>
             </el-select>
+            <div
+              v-if="tagDialogAction === 'detach' && dialogTagOptions.length === 0"
+              class="tag-empty-hint"
+            >
+              所选商品尚未打标
+            </div>
           </el-form-item>
         </el-form>
       </template>
@@ -397,7 +404,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, ArrowDown } from '@element-plus/icons-vue'
@@ -443,6 +450,25 @@ const tagDialogTitle = ref('打标')
 const tagDialogAction = ref('attach')
 const targetProducts = ref([])
 const selectedTagIds = ref([])
+
+const dialogTagOptions = computed(() => {
+  if (tagDialogAction.value === 'attach') {
+    return allTags.value
+  }
+  // detach 时只显示这些商品已有的标签（取并集，按 tag id 去重）
+  const tagMap = new Map()
+  targetProducts.value.forEach((product) => {
+    ;(product.tags || []).forEach((tag) => {
+      if (!tagMap.has(tag.id)) {
+        tagMap.set(tag.id, tag)
+      }
+    })
+  })
+  return Array.from(tagMap.values()).sort((a, b) => {
+    if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order
+    return a.id - b.id
+  })
+})
 
 const getStatusType = (status) => {
   const map = {
@@ -1037,5 +1063,11 @@ onMounted(() => {
 
 .dialog-loading {
   padding: 12px 0;
+}
+
+.tag-empty-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #9ca3af;
 }
 </style>
