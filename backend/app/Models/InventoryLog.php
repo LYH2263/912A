@@ -13,6 +13,7 @@ class InventoryLog extends Model
     protected $fillable = [
         'product_id',
         'sku_id',
+        'product_batch_id',
         'type',
         'quantity',
         'before_quantity',
@@ -42,6 +43,14 @@ class InventoryLog extends Model
     public function sku(): BelongsTo
     {
         return $this->belongsTo(ProductSku::class, 'sku_id');
+    }
+
+    /**
+     * 批次
+     */
+    public function productBatch(): BelongsTo
+    {
+        return $this->belongsTo(ProductBatch::class, 'product_batch_id');
     }
 
     /**

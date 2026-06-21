@@ -5,13 +5,17 @@ namespace App\Services;
 use App\Models\LowStockAlert;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\ProductBatch;
+use App\Repositories\ProductBatchRepository;
 use Illuminate\Support\Facades\DB;
 
 class StatisticsService
 {
-    /**
-     * 获取仪表盘汇总数据
-     */
+    public function __construct(
+        private ProductBatchRepository $batchRepository
+    ) {
+    }
+
     public function getDashboardSummary(): array
     {
         $today = now()->startOfDay();
@@ -20,6 +24,8 @@ class StatisticsService
         $totalInventoryValue = (float) Product::query()
             ->selectRaw('COALESCE(SUM(price * stock_quantity), 0) as total')
             ->value('total');
+
+        $batchSummary = $this->batchRepository->getExpiringSummary();
 
         return [
             'products' => [
@@ -41,6 +47,7 @@ class StatisticsService
             'alerts' => [
                 'unread_count' => LowStockAlert::where('status', 'unread')->count(),
             ],
+            'batches' => $batchSummary,
         ];
     }
 

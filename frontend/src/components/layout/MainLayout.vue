@@ -46,6 +46,14 @@
             <el-icon><Box /></el-icon>
             <span>库存管理</span>
           </el-menu-item>
+          <el-menu-item index="/batches">
+            <el-icon><Collection /></el-icon>
+            <span>批次管理</span>
+          </el-menu-item>
+          <el-menu-item index="/expiry-alerts">
+            <el-icon><Warning /></el-icon>
+            <span>临期预警</span>
+          </el-menu-item>
           <el-menu-item index="/coupons">
             <el-icon><Stamp /></el-icon>
             <span>优惠券管理</span>
@@ -118,7 +126,7 @@
 <script setup>
 import { computed, onMounted, ref, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataBoard, Goods, Document, Box, Stamp, Bell, ChatDotRound, OfficeBuilding, Refresh, CollectionTag, TrendCharts, User } from '@element-plus/icons-vue'
+import { DataBoard, Goods, Document, Box, Stamp, Bell, ChatDotRound, OfficeBuilding, Refresh, CollectionTag, TrendCharts, User, Collection, Warning } from '@element-plus/icons-vue'
 import { inventoryAlertApi } from '@/api/modules/inventoryAlert'
 
 const route = useRoute()

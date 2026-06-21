@@ -108,6 +108,16 @@ const routes = [
         component: () => import('../views/inventory/InventoryList.vue'),
       },
       {
+        path: 'batches',
+        name: 'Batches',
+        component: () => import('../views/batches/BatchList.vue'),
+      },
+      {
+        path: 'expiry-alerts',
+        name: 'ExpiryAlerts',
+        component: () => import('../views/batches/ExpiryAlertList.vue'),
+      },
+      {
         path: 'coupons',
         name: 'Coupons',
         component: () => import('../views/coupons/CouponList.vue'),

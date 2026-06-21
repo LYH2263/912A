@@ -122,6 +122,64 @@ class Product extends Model
     }
 
     /**
+     * 批次列表
+     */
+    public function batches(): HasMany
+    {
+        return $this->hasMany(ProductBatch::class);
+    }
+
+    /**
+     * 可售批次（FIFO顺序：按到期日升序，同到期日按创建时间升序）
+     */
+    public function sellableBatches(): HasMany
+    {
+        return $this->batches()
+            ->where('is_sellable', true)
+            ->where('quantity', '>', 0)
+            ->orderBy('expiry_date', 'asc')
+            ->orderBy('created_at', 'asc');
+    }
+
+    /**
+     * 临期批次
+     */
+    public function expiringSoonBatches(): HasMany
+    {
+        return $this->batches()
+            ->where('status', ProductBatch::STATUS_EXPIRING_SOON)
+            ->where('quantity', '>', 0)
+            ->orderBy('expiry_date', 'asc');
+    }
+
+    /**
+     * 已过期批次
+     */
+    public function expiredBatches(): HasMany
+    {
+        return $this->batches()
+            ->where('status', ProductBatch::STATUS_EXPIRED)
+            ->orderBy('expiry_date', 'asc');
+    }
+
+    /**
+     * 批次总库存（所有可售批次合计）
+     */
+    public function getBatchTotalStockAttribute(): int
+    {
+        return (int) $this->sellableBatches()->sum('quantity');
+    }
+
+    /**
+     * 最早到期日
+     */
+    public function getEarliestExpiryDateAttribute(): ?string
+    {
+        $batch = $this->sellableBatches()->first();
+        return $batch?->expiry_date?->toDateString();
+    }
+
+    /**
      * SKU总数
      */
     public function getSkuCountAttribute(): int

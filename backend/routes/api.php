@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\InventoryAlertApiController;
 use App\Http\Controllers\Api\InventoryApiController;
 use App\Http\Controllers\Api\OrderApiController;
 use App\Http\Controllers\Api\ProductApiController;
+use App\Http\Controllers\Api\ProductBatchApiController;
 use App\Http\Controllers\Api\ReturnApiController;
 use App\Http\Controllers\Api\ReviewApiController;
 use App\Http\Controllers\Api\SupplierApiController;
@@ -63,6 +64,16 @@ Route::prefix('api')->group(function () {
         Route::get('inventory/statistics', [InventoryApiController::class, 'index']);
         Route::get('inventory/{product}', [InventoryApiController::class, 'show']);
         Route::put('inventory/{product}', [InventoryApiController::class, 'update']);
+
+        // 批次 API
+        Route::get('product-batches/summary', [ProductBatchApiController::class, 'summary']);
+        Route::get('product-batches/expiring-soon', [ProductBatchApiController::class, 'expiringSoon']);
+        Route::get('product-batches/expired', [ProductBatchApiController::class, 'expired']);
+        Route::post('product-batches/scan-statuses', [ProductBatchApiController::class, 'scanStatuses']);
+        Route::get('product-batches/of-product/{productId}', [ProductBatchApiController::class, 'productBatches']);
+        Route::post('product-batches/{batch}/adjust-quantity', [ProductBatchApiController::class, 'adjustQuantity']);
+        Route::post('product-batches/{batch}/mark-unsellable', [ProductBatchApiController::class, 'markUnsellable']);
+        Route::apiResource('product-batches', ProductBatchApiController::class);
 
         // 库存预警 API
         Route::get('inventory-alerts', [InventoryAlertApiController::class, 'index']);

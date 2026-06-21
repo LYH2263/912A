@@ -137,10 +137,33 @@ class OrderService
 
                 if (!empty($itemData['product_sku_id'])) {
                     $sku = ProductSku::findOrFail($itemData['product_sku_id']);
-                    $this->inventoryService->decreaseSkuStock($sku, $itemData['quantity'], $order->id, '订单创建');
+                    $product = $sku->product;
+
+                    $hasBatches = \App\Models\ProductBatch::where('product_id', $product->id)
+                        ->where('sku_id', $sku->id)
+                        ->where('is_sellable', true)
+                        ->where('quantity', '>', 0)
+                        ->exists();
+
+                    if ($hasBatches) {
+                        $this->inventoryService->decreaseStockByFifo($product, $itemData['quantity'], $order->id, $sku->id, '订单创建');
+                    } else {
+                        $this->inventoryService->decreaseSkuStock($sku, $itemData['quantity'], $order->id, '订单创建');
+                    }
                 } else {
                     $product = Product::findOrFail($itemData['product_id']);
-                    $this->inventoryService->decreaseStock($product, $itemData['quantity'], $order->id, '订单创建');
+
+                    $hasBatches = \App\Models\ProductBatch::where('product_id', $product->id)
+                        ->whereNull('sku_id')
+                        ->where('is_sellable', true)
+                        ->where('quantity', '>', 0)
+                        ->exists();
+
+                    if ($hasBatches) {
+                        $this->inventoryService->decreaseStockByFifo($product, $itemData['quantity'], $order->id, null, '订单创建');
+                    } else {
+                        $this->inventoryService->decreaseStock($product, $itemData['quantity'], $order->id, '订单创建');
+                    }
                 }
             }
 
@@ -199,11 +222,29 @@ class OrderService
             if (!empty($item->product_sku_id)) {
                 $sku = ProductSku::find($item->product_sku_id);
                 if ($sku) {
-                    $this->inventoryService->increaseSkuStock($sku, $item->quantity, $order->id, '订单取消');
+                    $product = $sku->product;
+
+                    $hasBatches = \App\Models\ProductBatch::where('product_id', $product->id)
+                        ->where('sku_id', $sku->id)
+                        ->exists();
+
+                    if ($hasBatches) {
+                        $this->inventoryService->restoreStockToBatches($product, $item->quantity, $order->id, $sku->id, '订单取消');
+                    } else {
+                        $this->inventoryService->increaseSkuStock($sku, $item->quantity, $order->id, '订单取消');
+                    }
                 }
             } else {
                 $product = Product::findOrFail($item->product_id);
-                $this->inventoryService->increaseStock($product, $item->quantity, $order->id, '订单取消');
+
+                $hasBatches = \App\Models\ProductBatch::where('product_id', $product->id)
+                    ->exists();
+
+                if ($hasBatches) {
+                    $this->inventoryService->restoreStockToBatches($product, $item->quantity, $order->id, null, '订单取消');
+                } else {
+                    $this->inventoryService->increaseStock($product, $item->quantity, $order->id, '订单取消');
+                }
             }
         }
     }

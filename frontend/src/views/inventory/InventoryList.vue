@@ -7,6 +7,12 @@
             <span class="card-title">库存管理</span>
             <span class="card-subtitle">按商品与库存状态快速排查缺货与低库存</span>
           </div>
+          <div class="card-header-actions">
+            <el-button type="primary" @click="goToBatches">
+              <el-icon><Collection /></el-icon>
+              批次管理
+            </el-button>
+          </div>
         </div>
       </template>
 
@@ -57,9 +63,10 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
             <el-button size="small" @click="handleAdjust(row)">调整库存</el-button>
+            <el-button size="small" type="primary" plain @click="handleViewBatches(row)">查看批次</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -115,8 +122,12 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Collection } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
 import { inventoryApi } from '@/api/modules/inventory'
 import { productApi } from '@/api/modules/product'
+
+const router = useRouter()
 
 const inventory = ref([])
 const loading = ref(false)
@@ -264,6 +275,17 @@ const handleSizeChange = () => {
 
 const handleCurrentChange = () => {
   fetchInventory()
+}
+
+const goToBatches = () => {
+  router.push('/batches')
+}
+
+const handleViewBatches = (row) => {
+  router.push({
+    path: '/batches',
+    query: { product_id: row.id },
+  })
 }
 
 onMounted(() => {
