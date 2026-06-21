@@ -61,4 +61,20 @@ export const productApi = {
       data,
     })
   },
+
+  getPriceHistories(productId, params) {
+    return request({
+      url: `/products/${productId}/price-histories`,
+      method: 'get',
+      params,
+    })
+  },
+
+  getPriceTrend(productId, params) {
+    return request({
+      url: `/products/${productId}/price-trend`,
+      method: 'get',
+      params,
+    })
+  },
 }

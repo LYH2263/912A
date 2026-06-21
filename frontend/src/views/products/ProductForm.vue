@@ -118,6 +118,83 @@
                 <el-input-number v-model="form.low_stock_threshold" :min="0" />
               </el-form-item>
             </div>
+
+            <el-form-item v-if="isEdit" label="变更原因" prop="price_reason" class="price-reason-item">
+              <el-input
+                v-model="form.price_reason"
+                type="textarea"
+                :rows="2"
+                placeholder="请输入本次价格变更的原因（选填）"
+                maxlength="500"
+                show-word-limit
+              />
+            </el-form-item>
+          </el-tab-pane>
+
+          <el-tab-pane v-if="isEdit" label="调价历史" name="history">
+            <div class="price-history-section">
+              <div class="history-header">
+                <span class="history-title">价格变动记录</span>
+                <el-button type="primary" link @click="loadPriceHistories">
+                  <el-icon><Refresh /></el-icon>
+                  刷新
+                </el-button>
+              </div>
+              <el-table
+                :data="priceHistories"
+                v-loading="historyLoading"
+                stripe
+                style="width: 100%"
+              >
+                <el-table-column prop="created_at" label="变更时间" width="180">
+                  <template #default="{ row }">
+                    {{ formatDateTime(row.created_at) }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="SKU" width="200">
+                  <template #default="{ row }">
+                    <span v-if="row.sku">
+                      <span class="sku-code">{{ row.sku.sku }}</span>
+                      <span class="sku-spec" v-if="row.sku.spec_text">{{ row.sku.spec_text }}</span>
+                    </span>
+                    <span v-else class="no-sku">商品主价</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="old_price" label="旧价格" width="120" align="right">
+                  <template #default="{ row }">
+                    ¥{{ row.old_price.toFixed(2) }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="new_price" label="新价格" width="120" align="right">
+                  <template #default="{ row }">
+                    ¥{{ row.new_price.toFixed(2) }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="变动" width="140" align="right">
+                  <template #default="{ row }">
+                    <span :class="row.price_change >= 0 ? 'price-up' : 'price-down'">
+                      {{ row.price_change >= 0 ? '+' : '' }}{{ row.price_change.toFixed(2) }}
+                      ({{ row.price_change_percent >= 0 ? '+' : '' }}{{ row.price_change_percent }}%)
+                    </span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="reason" label="变更原因" min-width="180">
+                  <template #default="{ row }">
+                    <span v-if="row.reason">{{ row.reason }}</span>
+                    <span v-else class="text-muted">-</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作人" width="120">
+                  <template #default="{ row }">
+                    <span v-if="row.operator">{{ row.operator.name }}</span>
+                    <span v-else class="text-muted">系统</span>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <div v-if="priceHistories.length === 0 && !historyLoading" class="empty-history">
+                <el-empty description="暂无调价记录" />
+              </div>
+            </div>
           </el-tab-pane>
         </el-tabs>
 
@@ -133,13 +210,15 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, computed } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
 import { productApi } from '@/api/modules/product'
 import { supplierApi } from '@/api/modules/supplier'
 import { tagApi } from '@/api/modules/tag'
 import SpecMatrixEditor from '@/components/product/SpecMatrixEditor.vue'
+import dayjs from 'dayjs'
 
 const route = useRoute()
 const router = useRouter()
@@ -152,6 +231,8 @@ const categories = ref([])
 const suppliers = ref([])
 const allTags = ref([])
 const selectedTagIds = ref([])
+const priceHistories = ref([])
+const historyLoading = ref(false)
 
 const form = reactive({
   name: '',
@@ -167,6 +248,7 @@ const form = reactive({
   low_stock_threshold: 10,
   weight: null,
   status: 'active',
+  price_reason: '',
 })
 
 const specData = reactive({
@@ -179,11 +261,8 @@ const rules = {
   sku: [{ required: true, message: '请输入SPU编码', trigger: 'blur' }],
 }
 
-const fetchCategories = async () => {
-  try {
-    const { default: Category } = await import('@/api/modules/product.js')
-  } catch (e) {
-  }
+const formatDateTime = (dateStr) => {
+  return dateStr ? dayjs(dateStr).format('YYYY-MM-DD HH:mm:ss') : '-'
 }
 
 const fetchSuppliers = async () => {
@@ -207,6 +286,19 @@ const fetchAllTags = async () => {
 const goToTagManager = () => {
   const routeData = router.resolve({ path: '/tags' })
   window.open(routeData.href, '_blank')
+}
+
+const loadPriceHistories = async () => {
+  if (!route.params.id) return
+  historyLoading.value = true
+  try {
+    const res = await productApi.getPriceHistories(route.params.id, { per_page: 50 })
+    priceHistories.value = res.data || []
+  } catch (e) {
+    console.error('获取调价历史失败', e)
+  } finally {
+    historyLoading.value = false
+  }
 }
 
 const handleSubmit = async () => {
@@ -286,6 +378,8 @@ const loadProduct = async () => {
       } else {
         enableSpecs.value = false
       }
+
+      loadPriceHistories()
     } catch (error) {
       ElMessage.error('获取商品信息失败')
     }
@@ -365,5 +459,64 @@ onMounted(() => {
   margin-top: 6px;
   font-size: 12px;
   color: #6b7280;
+}
+
+.price-reason-item {
+  margin-top: 24px;
+}
+
+.price-history-section {
+  padding: 8px 0;
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.history-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.sku-code {
+  font-family: monospace;
+  font-size: 12px;
+  color: #4f46e5;
+  background: #eef2ff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 8px;
+}
+
+.sku-spec {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.no-sku {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.price-up {
+  color: #ef4444;
+  font-weight: 500;
+}
+
+.price-down {
+  color: #10b981;
+  font-weight: 500;
+}
+
+.text-muted {
+  color: #9ca3af;
+}
+
+.empty-history {
+  padding: 40px 0;
 }
 </style>

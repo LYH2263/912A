@@ -43,6 +43,11 @@ const routes = [
         component: () => import('../views/products/ProductForm.vue'),
       },
       {
+        path: 'price-trend',
+        name: 'PriceTrend',
+        component: () => import('../views/products/PriceTrend.vue'),
+      },
+      {
         path: 'suppliers',
         name: 'Suppliers',
         component: () => import('../views/suppliers/SupplierList.vue'),

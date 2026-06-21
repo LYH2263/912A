@@ -22,6 +22,10 @@
             <el-icon><Goods /></el-icon>
             <span>商品管理</span>
           </el-menu-item>
+          <el-menu-item index="/price-trend">
+            <el-icon><TrendCharts /></el-icon>
+            <span>价格趋势</span>
+          </el-menu-item>
           <el-menu-item index="/suppliers">
             <el-icon><OfficeBuilding /></el-icon>
             <span>供应商管理</span>
@@ -110,7 +114,7 @@
 <script setup>
 import { computed, onMounted, ref, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataBoard, Goods, Document, Box, Stamp, Bell, ChatDotRound, OfficeBuilding, Refresh, CollectionTag } from '@element-plus/icons-vue'
+import { DataBoard, Goods, Document, Box, Stamp, Bell, ChatDotRound, OfficeBuilding, Refresh, CollectionTag, TrendCharts } from '@element-plus/icons-vue'
 import { inventoryAlertApi } from '@/api/modules/inventoryAlert'
 
 const route = useRoute()

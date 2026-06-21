@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\PriceHistoryResource;
 use App\Http\Resources\ProductResource;
 use App\Models\Product;
+use App\Services\PriceHistoryService;
 use App\Services\ProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,7 +15,8 @@ class ProductApiController extends Controller
 {
     public function __construct(
         private ProductService $service,
-        private \App\Repositories\ProductRepository $repository
+        private \App\Repositories\ProductRepository $repository,
+        private PriceHistoryService $priceHistoryService
     ) {
     }
 
@@ -115,6 +118,7 @@ class ProductApiController extends Controller
             'skus.*.status' => 'nullable|in:active,inactive',
             'tag_ids' => 'nullable|array',
             'tag_ids.*' => 'exists:tags,id',
+            'price_reason' => 'nullable|string|max:500',
         ]);
 
         try {
@@ -123,6 +127,30 @@ class ProductApiController extends Controller
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         }
+    }
+
+    public function priceHistories(Request $request, Product $product): JsonResponse
+    {
+        $perPage = $request->get('per_page', 15);
+        $histories = $this->priceHistoryService->getByProductId($product->id, $perPage);
+
+        return response()->json([
+            'data' => PriceHistoryResource::collection($histories->items()),
+            'meta' => [
+                'current_page' => $histories->currentPage(),
+                'per_page' => $histories->perPage(),
+                'total' => $histories->total(),
+                'last_page' => $histories->lastPage(),
+            ],
+        ]);
+    }
+
+    public function priceTrend(Request $request, Product $product): JsonResponse
+    {
+        $days = $request->get('days', 90);
+        $trendData = $this->priceHistoryService->getTrendData($product->id, (int) $days);
+
+        return response()->json(['data' => $trendData]);
     }
 
     public function destroy(Product $product): JsonResponse

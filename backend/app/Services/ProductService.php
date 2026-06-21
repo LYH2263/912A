@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\Log;
 class ProductService
 {
     public function __construct(
-        private ProductRepository $repository
+        private ProductRepository $repository,
+        private PriceHistoryService $priceHistoryService
     ) {
     }
 
@@ -62,7 +63,8 @@ class ProductService
             $specs = $data['specs'] ?? null;
             $skus = $data['skus'] ?? null;
             $tagIds = $data['tag_ids'] ?? null;
-            unset($data['specs'], $data['skus'], $data['tag_ids']);
+            $priceReason = $data['price_reason'] ?? null;
+            unset($data['specs'], $data['skus'], $data['tag_ids'], $data['price_reason']);
 
             if (isset($data['sku']) && $this->repository->existsBySku($data['sku'], $product->id)) {
                 throw new \Exception('SKU 已存在，请使用其他 SKU');
@@ -72,8 +74,25 @@ class ProductService
                 throw new \Exception('成本价不能大于售价');
             }
 
+            $oldProductPrice = $product->price;
+            $oldSkuPrices = [];
+            if ($skus !== null) {
+                foreach ($product->skus as $sku) {
+                    $oldSkuPrices[$sku->id] = $sku->price;
+                }
+            }
+
             if (!empty($data)) {
                 $product = $this->repository->update($product, $data);
+            }
+
+            if (isset($data['price']) && abs($oldProductPrice - $data['price']) > 0.0001) {
+                $this->priceHistoryService->recordPriceChange(
+                    $product,
+                    (float) $oldProductPrice,
+                    (float) $data['price'],
+                    $priceReason
+                );
             }
 
             if ($specs !== null) {
@@ -95,6 +114,29 @@ class ProductService
                     }
                 }
                 $this->repository->saveSkus($product, $skus);
+
+                $product->refresh();
+                foreach ($product->skus as $sku) {
+                    if (isset($oldSkuPrices[$sku->id]) && abs($oldSkuPrices[$sku->id] - $sku->price) > 0.0001) {
+                        $this->priceHistoryService->recordPriceChange(
+                            $product,
+                            (float) $oldSkuPrices[$sku->id],
+                            (float) $sku->price,
+                            $priceReason,
+                            $sku
+                        );
+                    }
+                }
+
+                $newProductPrice = $product->price;
+                if (abs($oldProductPrice - $newProductPrice) > 0.0001 && !isset($data['price'])) {
+                    $this->priceHistoryService->recordPriceChange(
+                        $product,
+                        (float) $oldProductPrice,
+                        (float) $newProductPrice,
+                        $priceReason ?: 'SKU价格变动导致商品均价调整'
+                    );
+                }
             }
 
             if ($tagIds !== null) {

@@ -114,6 +114,14 @@ class Product extends Model
     }
 
     /**
+     * 价格变动历史
+     */
+    public function priceHistories(): HasMany
+    {
+        return $this->hasMany(PriceHistory::class)->orderBy('created_at', 'desc');
+    }
+
+    /**
      * SKU总数
      */
     public function getSkuCountAttribute(): int

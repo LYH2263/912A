@@ -38,6 +38,8 @@ Route::prefix('api')->group(function () {
         // 商品 API
         Route::apiResource('products', ProductApiController::class);
         Route::get('products/{product}/inventory', [ProductApiController::class, 'show']);
+        Route::get('products/{product}/price-histories', [ProductApiController::class, 'priceHistories']);
+        Route::get('products/{product}/price-trend', [ProductApiController::class, 'priceTrend']);
         Route::post('products/batch/attach-tags', [ProductApiController::class, 'batchAttachTags']);
         Route::post('products/batch/detach-tags', [ProductApiController::class, 'batchDetachTags']);
 
