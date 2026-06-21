@@ -34,15 +34,55 @@ class InventoryAlertRepository
     }
 
     /**
-     * 扫描并创建低库存预警
+     * 为单个商品创建或更新未读预警
+     * 当库存低于等于阈值（含缺货=0）时触发：
+     * - 已有未读预警：更新 current_stock 和 threshold
+     * - 无未读预警：创建新预警
+     */
+    public function createOrUpdateAlert(Product $product): ?LowStockAlert
+    {
+        if ($product->stock_quantity > $product->low_stock_threshold) {
+            return null;
+        }
+
+        $existingAlert = LowStockAlert::where('product_id', $product->id)
+            ->where('status', 'unread')
+            ->first();
+
+        if ($existingAlert) {
+            $existingAlert->update([
+                'current_stock' => $product->stock_quantity,
+                'threshold' => $product->low_stock_threshold,
+            ]);
+            return $existingAlert;
+        }
+
+        $alert = LowStockAlert::create([
+            'product_id' => $product->id,
+            'current_stock' => $product->stock_quantity,
+            'threshold' => $product->low_stock_threshold,
+            'status' => 'unread',
+        ]);
+
+        Log::info('低库存预警已创建', [
+            'product_id' => $product->id,
+            'product_name' => $product->name,
+            'current_stock' => $product->stock_quantity,
+            'threshold' => $product->low_stock_threshold,
+        ]);
+
+        return $alert;
+    }
+
+    /**
+     * 扫描并创建/更新低库存预警（含缺货商品）
      */
     public function scanAndCreateAlerts(): array
     {
         $createdCount = 0;
-        $skippedCount = 0;
+        $updatedCount = 0;
 
-        $lowStockProducts = Product::where('stock_quantity', '>', 0)
-            ->whereColumn('stock_quantity', '<=', 'low_stock_threshold')
+        $lowStockProducts = Product::whereColumn('stock_quantity', '<=', 'low_stock_threshold')
             ->get();
 
         foreach ($lowStockProducts as $product) {
@@ -51,7 +91,13 @@ class InventoryAlertRepository
                 ->first();
 
             if ($existingAlert) {
-                $skippedCount++;
+                if ($existingAlert->current_stock != $product->stock_quantity || $existingAlert->threshold != $product->low_stock_threshold) {
+                    $existingAlert->update([
+                        'current_stock' => $product->stock_quantity,
+                        'threshold' => $product->low_stock_threshold,
+                    ]);
+                    $updatedCount++;
+                }
                 continue;
             }
 
@@ -74,7 +120,7 @@ class InventoryAlertRepository
 
         return [
             'created' => $createdCount,
-            'skipped' => $skippedCount,
+            'updated' => $updatedCount,
             'total_low_stock' => $lowStockProducts->count(),
         ];
     }

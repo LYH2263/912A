@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\ProductBatch;
 use App\Models\ProductSku;
 use App\Repositories\ProductBatchRepository;
+use App\Services\InventoryAlertService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Carbon;
@@ -14,8 +15,24 @@ use Illuminate\Support\Carbon;
 class InventoryService
 {
     public function __construct(
-        private ProductBatchRepository $batchRepository
+        private ProductBatchRepository $batchRepository,
+        private InventoryAlertService $alertService
     ) {
+    }
+
+    /**
+     * 触发库存预警更新（库存变动后调用）
+     */
+    private function triggerAlert(Product $product): void
+    {
+        try {
+            $this->alertService->createOrUpdateAlert($product);
+        } catch (\Exception $e) {
+            Log::warning('库存预警更新失败', [
+                'product_id' => $product->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function increaseStock(Product $product, int $quantity, ?int $orderId = null, string $remark = ''): InventoryLog

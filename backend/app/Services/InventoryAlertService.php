@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\LowStockAlert;
+use App\Models\Product;
 use App\Repositories\InventoryAlertRepository;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -85,6 +86,16 @@ class InventoryAlertService
             ]);
 
             return $alert;
+        });
+    }
+
+    /**
+     * 为单个商品创建或更新未读预警（库存变动时调用）
+     */
+    public function createOrUpdateAlert(Product $product): ?LowStockAlert
+    {
+        return DB::transaction(function () use ($product) {
+            return $this->repository->createOrUpdateAlert($product);
         });
     }
 }
