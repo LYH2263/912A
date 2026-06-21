@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CouponApiController;
 use App\Http\Controllers\Api\DashboardApiController;
 use App\Http\Controllers\Api\InventoryApiController;
 use App\Http\Controllers\Api\OrderApiController;
@@ -41,5 +42,10 @@ Route::prefix('api')->group(function () {
         // 仪表盘 API
         Route::get('dashboard/summary', [DashboardApiController::class, 'summary']);
         Route::get('dashboard/charts', [DashboardApiController::class, 'charts']);
+
+        // 优惠券 API
+        Route::get('coupons/available', [CouponApiController::class, 'available']);
+        Route::post('coupons/calculate', [CouponApiController::class, 'calculate']);
+        Route::apiResource('coupons', CouponApiController::class);
     });
 });

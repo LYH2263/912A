@@ -87,20 +87,44 @@
           </el-button>
         </el-form-item>
 
+        <!-- 优惠券选择 -->
+        <el-form-item label="选择优惠券">
+          <el-select
+            v-model="form.coupon_id"
+            placeholder="请选择可用优惠券"
+            clearable
+            style="width: 400px"
+            @change="handleCouponChange"
+          >
+            <el-option
+              v-for="coupon in availableCoupons"
+              :key="coupon.id"
+              :label="getCouponLabel(coupon)"
+              :value="coupon.id"
+            />
+          </el-select>
+          <div v-if="selectedCouponInfo" class="coupon-info">
+            <el-tag type="success" size="small">
+              {{ selectedCouponInfo.type === 'fixed' ? '固定金额' : '折扣比例' }}
+            </el-tag>
+            <span>
+              {{ selectedCouponInfo.type === 'fixed' ? `减 ¥${selectedCouponInfo.value.toFixed(2)}` : `${selectedCouponInfo.value}% OFF` }}
+            </span>
+            <span v-if="selectedCouponInfo.min_amount > 0" style="color: #e6a23c; font-size: 12px">
+              (满 ¥{{ selectedCouponInfo.min_amount.toFixed(2) }} 可用)
+            </span>
+          </div>
+        </el-form-item>
+
         <!-- 订单金额 -->
         <el-form-item label="订单金额">
           <div style="font-size: 16px">
             <span>商品总额：¥{{ totalAmount.toFixed(2) }}</span>
             <el-divider direction="vertical" />
-            <span>优惠金额：</span>
-            <el-input-number
-              v-model="form.discount_amount"
-              :min="0"
-              :max="Math.max(totalAmount, 0)"
-              :precision="2"
-              @change="calculateTotal"
-              style="width: 150px; margin: 0 10px"
-            />
+            <span>优惠券抵扣：
+              <span v-if="form.coupon_id" style="color: #67c23a">-¥{{ couponDiscount.toFixed(2) }}</span>
+              <span v-else style="color: #909399">¥0.00</span>
+            </span>
             <el-divider direction="vertical" />
             <span style="font-weight: bold; color: #f56c6c; font-size: 18px">
               实付金额：¥{{ finalAmount.toFixed(2) }}
@@ -145,16 +169,18 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { orderApi } from '@/api/modules/order'
 import { productApi } from '@/api/modules/product'
+import { couponApi } from '@/api/modules/coupon'
 
 const router = useRouter()
 const formRef = ref(null)
 const loading = ref(false)
 const products = ref([])
+const availableCoupons = ref([])
 
 const form = reactive({
   items: [
@@ -163,6 +189,7 @@ const form = reactive({
       quantity: 1,
     },
   ],
+  coupon_id: null,
   discount_amount: 0,
   shipping_name: '',
   shipping_phone: '',
@@ -226,8 +253,24 @@ const totalAmount = computed(() => {
   return total
 })
 
+const couponDiscount = computed(() => {
+  if (!form.coupon_id) return 0
+  const coupon = availableCoupons.value.find((c) => c.id === form.coupon_id)
+  if (!coupon) return 0
+  if (coupon.min_amount > totalAmount.value) return 0
+  if (coupon.type === 'fixed') {
+    return Math.min(coupon.value, totalAmount.value)
+  }
+  return Math.round(totalAmount.value * (coupon.value / 100) * 100) / 100
+})
+
 const finalAmount = computed(() => {
-  return Math.max(0, totalAmount.value - (form.discount_amount || 0))
+  return Math.max(0, totalAmount.value - couponDiscount.value)
+})
+
+const selectedCouponInfo = computed(() => {
+  if (!form.coupon_id) return null
+  return availableCoupons.value.find((c) => c.id === form.coupon_id) || null
 })
 
 const getProductPrice = (productId) => {
@@ -240,6 +283,12 @@ const getProductStock = (productId) => {
   return product ? product.stock_quantity : 0
 }
 
+const getCouponLabel = (coupon) => {
+  const discount = coupon.type === 'fixed' ? `¥${coupon.value.toFixed(2)}` : `${coupon.value}%`
+  const minStr = coupon.min_amount > 0 ? `(满${coupon.min_amount}可用)` : '(无门槛)'
+  return `${coupon.name} - ${discount} ${minStr}`
+}
+
 const handleProductChange = (index) => {
   const item = form.items[index]
   if (item.product_id) {
@@ -250,6 +299,15 @@ const handleProductChange = (index) => {
     }
   }
   calculateTotal()
+}
+
+const handleCouponChange = () => {
+  if (form.coupon_id) {
+    const coupon = availableCoupons.value.find((c) => c.id === form.coupon_id)
+    if (coupon && coupon.min_amount > totalAmount.value) {
+      ElMessage.warning(`该优惠券需要满 ¥${coupon.min_amount.toFixed(2)} 才可使用`)
+    }
+  }
 }
 
 const addItem = () => {
@@ -267,7 +325,7 @@ const removeItem = (index) => {
 }
 
 const calculateTotal = () => {
-  // 触发计算
+
 }
 
 const fetchProducts = async () => {
@@ -278,6 +336,21 @@ const fetchProducts = async () => {
     ElMessage.error('获取商品列表失败')
   }
 }
+
+const fetchAvailableCoupons = async () => {
+  try {
+    const res = await couponApi.getAvailable({ order_amount: totalAmount.value })
+    availableCoupons.value = res.data || []
+  } catch (error) {
+    availableCoupons.value = []
+  }
+}
+
+watch(totalAmount, () => {
+  if (totalAmount.value > 0) {
+    fetchAvailableCoupons()
+  }
+})
 
 const handleSubmit = async () => {
   if (!formRef.value) return
@@ -292,7 +365,8 @@ const handleSubmit = async () => {
           product_id: item.product_id,
           quantity: item.quantity,
         })),
-        discount_amount: form.discount_amount || 0,
+        coupon_id: form.coupon_id || null,
+        discount_amount: couponDiscount.value || 0,
         shipping_name: form.shipping_name,
         shipping_phone: form.shipping_phone,
         shipping_address: form.shipping_address,
@@ -341,5 +415,14 @@ onMounted(() => {
 .card-subtitle {
   font-size: 12px;
   color: #6b7280;
+}
+
+.coupon-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: #374151;
 }
 </style>

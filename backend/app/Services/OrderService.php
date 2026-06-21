@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Coupon;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -24,7 +25,6 @@ class OrderService
     public function create(array $data): Order
     {
         return DB::transaction(function () use ($data) {
-            // 验证商品库存
             $items = $data['items'];
             foreach ($items as $item) {
                 $product = Product::findOrFail($item['product_id']);
@@ -36,10 +36,8 @@ class OrderService
                 }
             }
 
-            // 生成订单号
             $orderNo = Order::generateOrderNo();
 
-            // 计算订单金额
             $totalAmount = 0;
             foreach ($items as $item) {
                 $product = Product::findOrFail($item['product_id']);
@@ -47,13 +45,28 @@ class OrderService
                 $totalAmount += $subtotal;
             }
 
-            $discountAmount = $data['discount_amount'] ?? 0;
+            $discountAmount = 0;
+            $couponId = null;
+            $user = auth()->user();
+
+            if (!empty($data['coupon_id'])) {
+                $coupon = Coupon::findOrFail($data['coupon_id']);
+                $couponService = app(CouponService::class);
+                $result = $couponService->validateAndCalculate($coupon, $totalAmount, $user);
+                $discountAmount = $result['discount_amount'];
+                $couponId = $coupon->id;
+
+                $couponService->markAsUsed($coupon, $user);
+            } else {
+                $discountAmount = $data['discount_amount'] ?? 0;
+            }
+
             $finalAmount = $totalAmount - $discountAmount;
 
-            // 创建订单
             $order = $this->repository->create([
                 'order_no' => $orderNo,
                 'user_id' => $data['user_id'] ?? null,
+                'coupon_id' => $couponId,
                 'total_amount' => $totalAmount,
                 'discount_amount' => $discountAmount,
                 'final_amount' => $finalAmount,
@@ -64,7 +77,6 @@ class OrderService
                 'remark' => $data['remark'] ?? null,
             ]);
 
-            // 创建订单项并扣减库存
             foreach ($items as $item) {
                 $product = Product::findOrFail($item['product_id']);
                 $subtotal = $product->price * $item['quantity'];
@@ -79,7 +91,6 @@ class OrderService
                     'subtotal' => $subtotal,
                 ]);
 
-                // 扣减库存
                 $this->inventoryService->decreaseStock($product, $item['quantity'], $order->id, '订单创建');
             }
 

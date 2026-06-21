@@ -14,6 +14,7 @@ class Order extends Model
     protected $fillable = [
         'order_no',
         'user_id',
+        'coupon_id',
         'total_amount',
         'discount_amount',
         'final_amount',
@@ -44,6 +45,11 @@ class Order extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function coupon(): BelongsTo
+    {
+        return $this->belongsTo(Coupon::class);
     }
 
     /**

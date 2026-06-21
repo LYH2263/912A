@@ -62,6 +62,21 @@ const routes = [
         name: 'Inventory',
         component: () => import('../views/inventory/InventoryList.vue'),
       },
+      {
+        path: 'coupons',
+        name: 'Coupons',
+        component: () => import('../views/coupons/CouponList.vue'),
+      },
+      {
+        path: 'coupons/create',
+        name: 'CouponCreate',
+        component: () => import('../views/coupons/CouponForm.vue'),
+      },
+      {
+        path: 'coupons/:id/edit',
+        name: 'CouponEdit',
+        component: () => import('../views/coupons/CouponForm.vue'),
+      },
     ],
   },
 ]

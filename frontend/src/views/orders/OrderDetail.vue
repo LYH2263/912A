@@ -32,6 +32,31 @@
           <el-descriptions-item label="取消时间" v-if="order.cancelled_at">{{ order.cancelled_at }}</el-descriptions-item>
         </el-descriptions>
 
+        <!-- 优惠券使用记录 -->
+        <el-descriptions
+          v-if="order.coupon"
+          title="优惠券记录"
+          :column="2"
+          border
+          style="margin-top: 20px"
+        >
+          <el-descriptions-item label="优惠券名称">{{ order.coupon.name }}</el-descriptions-item>
+          <el-descriptions-item label="优惠券代码">{{ order.coupon.code }}</el-descriptions-item>
+          <el-descriptions-item label="优惠券类型">
+            <el-tag :type="order.coupon.type === 'fixed' ? '' : 'success'" size="small">
+              {{ order.coupon.type === 'fixed' ? '固定金额' : '折扣比例' }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="优惠面值">
+            <span v-if="order.coupon.type === 'fixed'">¥{{ order.coupon.value.toFixed(2) }}</span>
+            <span v-else>{{ order.coupon.value }}%</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="最低消费门槛">¥{{ order.coupon.min_amount.toFixed(2) }}</el-descriptions-item>
+          <el-descriptions-item label="实际抵扣金额">
+            <span class="final-amount">¥{{ order.discount_amount.toFixed(2) }}</span>
+          </el-descriptions-item>
+        </el-descriptions>
+
         <!-- 收货信息 -->
         <el-descriptions title="收货信息" :column="2" border style="margin-top: 20px">
           <el-descriptions-item label="收货人">{{ order.shipping_name }}</el-descriptions-item>

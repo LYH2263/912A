@@ -43,7 +43,7 @@ class OrderApiController extends Controller
      */
     public function show(Order $order): JsonResponse
     {
-        $order->load('orderItems.product');
+        $order->load('orderItems.product', 'coupon');
         return response()->json(['data' => new OrderResource($order)]);
     }
 
@@ -56,6 +56,7 @@ class OrderApiController extends Controller
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1',
+            'coupon_id' => 'nullable|exists:coupons,id',
             'discount_amount' => 'nullable|numeric|min:0',
             'shipping_address' => 'nullable|string',
             'shipping_name' => 'nullable|string|max:100',

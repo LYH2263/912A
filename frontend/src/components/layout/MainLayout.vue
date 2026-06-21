@@ -30,6 +30,10 @@
             <el-icon><Box /></el-icon>
             <span>库存管理</span>
           </el-menu-item>
+          <el-menu-item index="/coupons">
+            <el-icon><Stamp /></el-icon>
+            <span>优惠券管理</span>
+          </el-menu-item>
         </el-menu>
       </div>
       <div
@@ -77,7 +81,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataBoard, Goods, Document, Box } from '@element-plus/icons-vue'
+import { DataBoard, Goods, Document, Box, Stamp } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
