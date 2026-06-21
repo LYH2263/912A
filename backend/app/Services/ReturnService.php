@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\ProductBatch;
 use App\Models\ProductSku;
 use App\Models\ReturnRequest;
 use App\Repositories\ReturnRepository;
@@ -22,15 +23,26 @@ class ReturnService
     public function create(array $data): ReturnRequest
     {
         return DB::transaction(function () use ($data) {
-            $orderItem = OrderItem::findOrFail($data['order_item_id']);
             $order = Order::findOrFail($data['order_id']);
+            $orderItem = OrderItem::findOrFail($data['order_item_id']);
+
+            if ($orderItem->order_id !== $order->id) {
+                throw new \Exception('所选商品项不属于该订单');
+            }
 
             if (!in_array($order->status, ['paid', 'shipped'])) {
                 throw new \Exception('仅已支付或已发货的订单可申请退换货');
             }
 
-            if ($data['quantity'] > $orderItem->quantity) {
-                throw new \Exception('退货数量不能超过订单商品数量');
+            $appliedQuantity = $this->getAppliedQuantity($orderItem->id);
+            $remainingQuantity = $orderItem->quantity - $appliedQuantity;
+
+            if ($remainingQuantity <= 0) {
+                throw new \Exception('该商品已全部申请退换货，不可重复申请');
+            }
+
+            if ($data['quantity'] > $remainingQuantity) {
+                throw new \Exception("退货数量超过剩余可退数量，剩余可退：{$remainingQuantity}");
             }
 
             if (empty($data['refund_amount']) || $data['refund_amount'] < 0) {
@@ -64,6 +76,13 @@ class ReturnService
 
             return $return->load(['order', 'orderItem.product']);
         });
+    }
+
+    private function getAppliedQuantity(int $orderItemId): int
+    {
+        return (int) ReturnRequest::where('order_item_id', $orderItemId)
+            ->whereIn('status', ['pending', 'approved', 'completed'])
+            ->sum('quantity');
     }
 
     public function approve(ReturnRequest $return): ReturnRequest
@@ -156,15 +175,34 @@ class ReturnService
     {
         $orderItem = $return->orderItem;
         $quantity = $return->quantity;
+        $orderId = $return->order_id;
 
         if (!empty($orderItem->product_sku_id)) {
             $sku = ProductSku::find($orderItem->product_sku_id);
             if ($sku) {
-                $this->inventoryService->increaseSkuStock($sku, $quantity, $return->order_id, '退货入库');
+                $product = $sku->product;
+
+                $hasBatches = ProductBatch::where('product_id', $product->id)
+                    ->where('sku_id', $sku->id)
+                    ->exists();
+
+                if ($hasBatches) {
+                    $this->inventoryService->restoreStockToBatches($product, $quantity, $orderId, $sku->id, '退货入库');
+                } else {
+                    $this->inventoryService->increaseSkuStock($sku, $quantity, $orderId, '退货入库');
+                }
             }
         } else {
             $product = Product::findOrFail($orderItem->product_id);
-            $this->inventoryService->increaseStock($product, $quantity, $return->order_id, '退货入库');
+
+            $hasBatches = ProductBatch::where('product_id', $product->id)
+                ->exists();
+
+            if ($hasBatches) {
+                $this->inventoryService->restoreStockToBatches($product, $quantity, $orderId, null, '退货入库');
+            } else {
+                $this->inventoryService->increaseStock($product, $quantity, $orderId, '退货入库');
+            }
         }
     }
 }
