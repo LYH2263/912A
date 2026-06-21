@@ -77,6 +77,11 @@ const routes = [
         name: 'CouponEdit',
         component: () => import('../views/coupons/CouponForm.vue'),
       },
+      {
+        path: 'alerts',
+        name: 'Alerts',
+        component: () => import('../views/alerts/AlertList.vue'),
+      },
     ],
   },
 ]

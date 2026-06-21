@@ -34,6 +34,12 @@
             <el-icon><Stamp /></el-icon>
             <span>优惠券管理</span>
           </el-menu-item>
+          <el-menu-item index="/alerts">
+            <el-badge :value="unreadAlertCount" :max="99" :hidden="unreadAlertCount === 0" class="alert-badge">
+              <el-icon><Bell /></el-icon>
+            </el-badge>
+            <span>通知中心</span>
+          </el-menu-item>
         </el-menu>
       </div>
       <div
@@ -70,6 +76,13 @@
         <div class="header-left">
           <span class="header-breadcrumb">控制台</span>
         </div>
+        <div class="header-right">
+          <div class="header-notification" @click="goToAlerts">
+            <el-badge :value="unreadAlertCount" :max="99" :hidden="unreadAlertCount === 0" class="notification-badge">
+              <el-icon :size="20"><Bell /></el-icon>
+            </el-badge>
+          </div>
+        </div>
       </el-header>
       <el-main class="main-content">
         <router-view />
@@ -79,9 +92,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataBoard, Goods, Document, Box, Stamp } from '@element-plus/icons-vue'
+import { DataBoard, Goods, Document, Box, Stamp, Bell } from '@element-plus/icons-vue'
+import { inventoryAlertApi } from '@/api/modules/inventoryAlert'
 
 const route = useRoute()
 const router = useRouter()
@@ -90,6 +104,8 @@ const activeMenu = computed(() => route.path)
 
 const currentUser = ref(null)
 const showLogout = ref(false)
+const unreadAlertCount = ref(0)
+let alertPollingTimer = null
 
 const displayName = computed(() => {
   if (currentUser.value?.email) return currentUser.value.email
@@ -103,12 +119,34 @@ const avatarInitial = computed(() => {
   return source.charAt(0).toUpperCase()
 })
 
+const fetchUnreadAlertCount = async () => {
+  try {
+    const res = await inventoryAlertApi.getUnreadCount()
+    unreadAlertCount.value = res.data.count
+  } catch (error) {
+    console.error('获取未读预警数量失败', error)
+  }
+}
+
+const goToAlerts = () => {
+  router.push('/alerts')
+}
+
 onMounted(() => {
   try {
     const raw = localStorage.getItem('user')
     currentUser.value = raw ? JSON.parse(raw) : null
   } catch {
     currentUser.value = null
+  }
+
+  fetchUnreadAlertCount()
+  alertPollingTimer = setInterval(fetchUnreadAlertCount, 30000)
+})
+
+onUnmounted(() => {
+  if (alertPollingTimer) {
+    clearInterval(alertPollingTimer)
   }
 })
 
@@ -306,6 +344,28 @@ const handleLogout = async () => {
 .header-right {
   display: flex;
   align-items: center;
+}
+
+.header-notification {
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: #4b5563;
+  transition: all 0.2s ease;
+}
+
+.header-notification:hover {
+  background-color: #f3f4ff;
+  color: #4f46e5;
+}
+
+.notification-badge {
+  display: inline-flex;
+}
+
+.alert-badge {
+  display: inline-flex;
+  vertical-align: middle;
 }
 
 .user-info {

@@ -77,6 +77,14 @@ class Product extends Model
     }
 
     /**
+     * 低库存预警
+     */
+    public function lowStockAlerts(): HasMany
+    {
+        return $this->hasMany(LowStockAlert::class);
+    }
+
+    /**
      * SKU总数
      */
     public function getSkuCountAttribute(): int

@@ -8,15 +8,22 @@
     </div>
 
     <el-row :gutter="20" class="stats-row">
-      <el-col :span="8" v-for="stat in stats" :key="stat.title">
-        <el-card class="stat-card" :style="{ '--accent-color': stat.color }">
+      <el-col :span="cardSpan" v-for="stat in allStats" :key="stat.title">
+        <el-card
+          class="stat-card"
+          :style="{ '--accent-color': stat.color }"
+          @click="stat.title === '库存预警' && goToAlerts()"
+          :class="{ 'clickable': stat.title === '库存预警' }"
+        >
           <div class="stat-content">
             <div class="stat-text">
               <div class="stat-label">{{ stat.title }}</div>
-            <div class="stat-value">{{ stat.value }}</div>
-          </div>
+              <div class="stat-value" :class="{ 'alert-value': stat.title === '库存预警' && stat.value > 0 }">
+                {{ stat.value }}
+              </div>
+            </div>
             <div class="stat-icon">
-            <el-icon :size="40"><component :is="stat.icon" /></el-icon>
+              <el-icon :size="40"><component :is="stat.icon" /></el-icon>
             </div>
           </div>
         </el-card>
@@ -26,15 +33,42 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { Goods, Document, Box } from '@element-plus/icons-vue'
+import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { Goods, Document, Box, Warning } from '@element-plus/icons-vue'
 import { dashboardApi } from '@/api/modules/dashboard'
+
+const router = useRouter()
+
+const alertCount = ref(0)
 
 const stats = ref([
   { title: '商品总数', value: 0, icon: Goods, color: '#409EFF' },
   { title: '今日订单', value: 0, icon: Document, color: '#67C23A' },
   { title: '库存总价值', value: 0, icon: Box, color: '#E6A23C' },
 ])
+
+const alertStat = computed(() => ({
+  title: '库存预警',
+  value: alertCount.value,
+  icon: Warning,
+  color: '#F56C6C',
+}))
+
+const allStats = computed(() => {
+  if (alertCount.value > 0) {
+    return [...stats.value, alertStat.value]
+  }
+  return stats.value
+})
+
+const cardSpan = computed(() => {
+  return alertCount.value > 0 ? 6 : 8
+})
+
+const goToAlerts = () => {
+  router.push('/alerts')
+}
 
 onMounted(async () => {
   try {
@@ -45,6 +79,7 @@ onMounted(async () => {
     stats.value[1].value = data.orders.today_count
     const totalValue = Number(data.inventory?.total_value ?? 0)
     stats.value[2].value = `¥${totalValue.toFixed(2)}`
+    alertCount.value = data.alerts?.unread_count ?? 0
   } catch (error) {
     console.error('获取数据失败', error)
   }
@@ -133,5 +168,28 @@ onMounted(async () => {
 .stat-icon {
   color: var(--accent-color);
   opacity: 0.26;
+}
+
+.stat-card.clickable {
+  cursor: pointer;
+}
+
+.stat-card.clickable:hover {
+  transform: translateY(-6px) !important;
+  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.28) !important;
+}
+
+.alert-value {
+  color: #f56c6c !important;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 </style>

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\LowStockAlert;
 use App\Models\Order;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
@@ -36,6 +37,9 @@ class StatisticsService
             ],
             'inventory' => [
                 'total_value' => $totalInventoryValue,
+            ],
+            'alerts' => [
+                'unread_count' => LowStockAlert::where('status', 'unread')->count(),
             ],
         ];
     }

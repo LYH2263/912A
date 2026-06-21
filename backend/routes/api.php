@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CouponApiController;
 use App\Http\Controllers\Api\DashboardApiController;
+use App\Http\Controllers\Api\InventoryAlertApiController;
 use App\Http\Controllers\Api\InventoryApiController;
 use App\Http\Controllers\Api\OrderApiController;
 use App\Http\Controllers\Api\ProductApiController;
@@ -38,6 +39,13 @@ Route::prefix('api')->group(function () {
         Route::get('inventory/statistics', [InventoryApiController::class, 'index']);
         Route::get('inventory/{product}', [InventoryApiController::class, 'show']);
         Route::put('inventory/{product}', [InventoryApiController::class, 'update']);
+
+        // 库存预警 API
+        Route::get('inventory-alerts', [InventoryAlertApiController::class, 'index']);
+        Route::get('inventory-alerts/unread-count', [InventoryAlertApiController::class, 'unreadCount']);
+        Route::post('inventory-alerts/scan', [InventoryAlertApiController::class, 'scan']);
+        Route::post('inventory-alerts/mark-all-read', [InventoryAlertApiController::class, 'markAllAsRead']);
+        Route::post('inventory-alerts/{id}/mark-read', [InventoryAlertApiController::class, 'markAsRead']);
 
         // 仪表盘 API
         Route::get('dashboard/summary', [DashboardApiController::class, 'summary']);
