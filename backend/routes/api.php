@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\InventoryAlertApiController;
 use App\Http\Controllers\Api\InventoryApiController;
 use App\Http\Controllers\Api\OrderApiController;
 use App\Http\Controllers\Api\ProductApiController;
+use App\Http\Controllers\Api\ReviewApiController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -55,5 +56,15 @@ Route::prefix('api')->group(function () {
         Route::get('coupons/available', [CouponApiController::class, 'available']);
         Route::post('coupons/calculate', [CouponApiController::class, 'calculate']);
         Route::apiResource('coupons', CouponApiController::class);
+
+        // 评价 API
+        Route::get('reviews/statistics', [ReviewApiController::class, 'statistics']);
+        Route::get('reviews/products-summary', [ReviewApiController::class, 'productsSummary']);
+        Route::get('reviews/products/{productId}', [ReviewApiController::class, 'productReviews']);
+        Route::get('reviews/products/{productId}/summary', [ReviewApiController::class, 'productSummary']);
+        Route::post('reviews/{review}/approve', [ReviewApiController::class, 'approve']);
+        Route::post('reviews/{review}/reject', [ReviewApiController::class, 'reject']);
+        Route::post('reviews/{review}/toggle-visibility', [ReviewApiController::class, 'toggleVisibility']);
+        Route::apiResource('reviews', ReviewApiController::class);
     });
 });

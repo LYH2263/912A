@@ -85,6 +85,14 @@ class Product extends Model
     }
 
     /**
+     * 评价
+     */
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class);
+    }
+
+    /**
      * SKU总数
      */
     public function getSkuCountAttribute(): int
