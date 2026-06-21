@@ -69,6 +69,13 @@ class ProductBatchApiController extends Controller
             'remark' => 'nullable|string|max:1000',
         ]);
 
+        $exists = ProductBatch::where('product_id', $validated['product_id'])
+            ->where('batch_no', $validated['batch_no'])
+            ->exists();
+        if ($exists) {
+            return response()->json(['message' => '该商品下已存在相同批次号'], 400);
+        }
+
         try {
             $product = Product::findOrFail($validated['product_id']);
             $batch = $this->inventoryService->createBatch($product, $validated, $validated['remark'] ?? '');
@@ -90,9 +97,23 @@ class ProductBatchApiController extends Controller
             'is_sellable' => 'sometimes|boolean',
         ]);
 
+        if (isset($validated['batch_no'])) {
+            $exists = ProductBatch::where('product_id', $batch->product_id)
+                ->where('batch_no', $validated['batch_no'])
+                ->where('id', '!=', $batch->id)
+                ->exists();
+            if ($exists) {
+                return response()->json(['message' => '该商品下已存在相同批次号'], 400);
+            }
+        }
+
         try {
             $updated = $this->repository->update($batch, $validated);
-            return response()->json(['data' => $updated]);
+            $product = $batch->product;
+            if ($product) {
+                $this->inventoryService->recalculateSellableStock($product);
+            }
+            return response()->json(['data' => $updated->fresh()]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         }
@@ -101,7 +122,11 @@ class ProductBatchApiController extends Controller
     public function destroy(ProductBatch $batch): JsonResponse
     {
         try {
+            $product = $batch->product;
             $this->repository->delete($batch);
+            if ($product) {
+                $this->inventoryService->recalculateSellableStock($product);
+            }
             return response()->json(null, 204);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);

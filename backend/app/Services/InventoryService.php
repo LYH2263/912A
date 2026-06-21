@@ -314,34 +314,21 @@ class InventoryService
             $batch = ProductBatch::create($batchData);
 
             $beforeQuantity = $product->stock_quantity;
-            $afterQuantity = $beforeQuantity + $quantity;
 
-            $product->update(['stock_quantity' => $afterQuantity]);
+            $this->recalculateSellableStock($product);
 
-            if ($product->status === 'sold_out' && $afterQuantity > 0) {
-                $product->update(['status' => 'active']);
-            }
-
-            if (!empty($batchData['sku_id'])) {
-                $sku = ProductSku::find($batchData['sku_id']);
-                if ($sku) {
-                    $skuBefore = $sku->stock_quantity;
-                    $sku->update(['stock_quantity' => $skuBefore + $quantity]);
-
-                    $productTotalStock = $product->skus()->sum('stock_quantity');
-                    $product->update(['stock_quantity' => $productTotalStock]);
-                }
-            }
+            $product->refresh();
+            $afterQuantity = $product->stock_quantity;
 
             InventoryLog::create([
                 'product_id' => $product->id,
                 'sku_id' => $batchData['sku_id'] ?? null,
                 'product_batch_id' => $batch->id,
                 'type' => 'in',
-                'quantity' => $quantity,
+                'quantity' => $batch->is_sellable ? $quantity : 0,
                 'before_quantity' => $beforeQuantity,
                 'after_quantity' => $afterQuantity,
-                'remark' => $remark . ' [批次入库: ' . $batch->batch_no . ']',
+                'remark' => $remark . ' [批次入库: ' . $batch->batch_no . ']' . ($batch->is_sellable ? '' : '（不可售批次，不计入可售库存）'),
                 'operator_id' => auth()->id(),
             ]);
 
@@ -350,6 +337,7 @@ class InventoryService
                 'batch_no' => $batch->batch_no,
                 'product_id' => $product->id,
                 'quantity' => $quantity,
+                'is_sellable' => $batch->is_sellable,
             ]);
 
             return $batch->fresh();
@@ -405,23 +393,12 @@ class InventoryService
                 $remaining -= $deductQty;
             }
 
-            $totalAfter = $totalBefore - $quantity;
-            $product->update(['stock_quantity' => $totalAfter]);
+            $totalBefore = $product->stock_quantity;
 
-            if ($skuId) {
-                $sku = ProductSku::find($skuId);
-                if ($sku) {
-                    $skuBefore = $sku->stock_quantity;
-                    $sku->update(['stock_quantity' => max(0, $skuBefore - $quantity)]);
+            $this->recalculateSellableStock($product);
 
-                    $productTotalStock = $product->skus()->sum('stock_quantity');
-                    $product->update(['stock_quantity' => $productTotalStock]);
-                }
-            }
-
-            if ($product->stock_quantity === 0) {
-                $product->update(['status' => 'sold_out']);
-            }
+            $product->refresh();
+            $totalAfter = $product->stock_quantity;
 
             Log::info('FIFO批次扣减成功', [
                 'product_id' => $product->id,
@@ -446,87 +423,77 @@ class InventoryService
             $batches = ProductBatch::where('product_id', $product->id)
                 ->when($skuId, fn($q) => $q->where('sku_id', $skuId))
                 ->when(is_null($skuId), fn($q) => $q->whereNull('sku_id'))
+                ->where('is_sellable', true)
                 ->orderBy('expiry_date', 'desc')
                 ->orderBy('created_at', 'desc')
                 ->get();
 
-            if ($batches->isEmpty()) {
-                $this->increaseStock($product, $quantity, $orderId, $remark);
-                return [
-                    'total_restored' => $quantity,
-                    'batches' => [],
-                ];
-            }
-
-            $remaining = $quantity;
-            $restoredBatches = [];
             $totalBefore = $product->stock_quantity;
+            $restoredBatches = [];
 
-            foreach ($batches as $batch) {
-                if ($remaining <= 0) {
-                    break;
+            if ($batches->isNotEmpty()) {
+                $remaining = $quantity;
+
+                foreach ($batches as $batch) {
+                    if ($remaining <= 0) {
+                        break;
+                    }
+
+                    $maxRestore = $batch->initial_quantity - $batch->quantity;
+                    $restoreQty = min($maxRestore, $remaining);
+                    if ($restoreQty <= 0) {
+                        continue;
+                    }
+
+                    $batchBefore = $batch->quantity;
+                    $batchAfter = $batchBefore + $restoreQty;
+
+                    $batch->update([
+                        'quantity' => $batchAfter,
+                    ]);
+                    $batch->refreshStatus();
+                    $batch->save();
+
+                    $restoredBatches[] = [
+                        'batch_id' => $batch->id,
+                        'batch_no' => $batch->batch_no,
+                        'quantity' => $restoreQty,
+                        'before' => $batchBefore,
+                        'after' => $batchAfter,
+                    ];
+
+                    InventoryLog::create([
+                        'product_id' => $product->id,
+                        'sku_id' => $skuId,
+                        'product_batch_id' => $batch->id,
+                        'type' => $orderId ? 'return' : 'in',
+                        'quantity' => $restoreQty,
+                        'before_quantity' => $batchBefore,
+                        'after_quantity' => $batchAfter,
+                        'related_order_id' => $orderId,
+                        'remark' => $remark . ' [批次归还: ' . $batch->batch_no . ']',
+                        'operator_id' => auth()->id(),
+                    ]);
+
+                    $remaining -= $restoreQty;
                 }
 
-                $maxRestore = $batch->initial_quantity - $batch->quantity;
-                $restoreQty = min($maxRestore, $remaining);
-                if ($restoreQty <= 0) {
-                    continue;
+                if ($remaining > 0) {
+                    Log::warning('批次归还库存有剩余，无匹配批次可归还', [
+                        'product_id' => $product->id,
+                        'sku_id' => $skuId,
+                        'quantity' => $quantity,
+                        'remaining' => $remaining,
+                    ]);
                 }
-
-                $batchBefore = $batch->quantity;
-                $batchAfter = $batchBefore + $restoreQty;
-
-                $batch->update([
-                    'quantity' => $batchAfter,
-                ]);
-                $batch->refreshStatus();
-                $batch->save();
-
-                $restoredBatches[] = [
-                    'batch_id' => $batch->id,
-                    'batch_no' => $batch->batch_no,
-                    'quantity' => $restoreQty,
-                    'before' => $batchBefore,
-                    'after' => $batchAfter,
-                ];
-
-                InventoryLog::create([
-                    'product_id' => $product->id,
-                    'sku_id' => $skuId,
-                    'product_batch_id' => $batch->id,
-                    'type' => $orderId ? 'return' : 'in',
-                    'quantity' => $restoreQty,
-                    'before_quantity' => $batchBefore,
-                    'after_quantity' => $batchAfter,
-                    'related_order_id' => $orderId,
-                    'remark' => $remark . ' [批次归还: ' . $batch->batch_no . ']',
-                    'operator_id' => auth()->id(),
-                ]);
-
-                $remaining -= $restoreQty;
+            } else {
+                $this->increaseStock($product, $quantity, $orderId, $remark . ' [无批次记录，直接增加总库存]');
             }
 
-            if ($remaining > 0) {
-                $this->increaseStock($product, $remaining, $orderId, $remark . ' [剩余量无匹配批次，直接增加总库存]');
-            }
+            $this->recalculateSellableStock($product);
 
-            $totalAfter = $totalBefore + $quantity;
-            $product->update(['stock_quantity' => $totalAfter]);
-
-            if ($skuId) {
-                $sku = ProductSku::find($skuId);
-                if ($sku) {
-                    $skuBefore = $sku->stock_quantity;
-                    $sku->update(['stock_quantity' => $skuBefore + $quantity]);
-
-                    $productTotalStock = $product->skus()->sum('stock_quantity');
-                    $product->update(['stock_quantity' => $productTotalStock]);
-                }
-            }
-
-            if ($product->status === 'sold_out' && $totalAfter > 0) {
-                $product->update(['status' => 'active']);
-            }
+            $product->refresh();
+            $totalAfter = $product->stock_quantity;
 
             Log::info('批次归还库存成功', [
                 'product_id' => $product->id,
@@ -557,35 +524,21 @@ class InventoryService
 
             $product = $batch->product;
             $productBefore = $product->stock_quantity;
-            $productAfter = $productBefore + $diff;
-            $product->update(['stock_quantity' => max(0, $productAfter)]);
 
-            if ($batch->sku_id) {
-                $sku = ProductSku::find($batch->sku_id);
-                if ($sku) {
-                    $skuBefore = $sku->stock_quantity;
-                    $sku->update(['stock_quantity' => max(0, $skuBefore + $diff)]);
+            $this->recalculateSellableStock($product);
 
-                    $productTotalStock = $product->skus()->sum('stock_quantity');
-                    $product->update(['stock_quantity' => $productTotalStock]);
-                }
-            }
-
-            if ($product->stock_quantity === 0) {
-                $product->update(['status' => 'sold_out']);
-            } elseif ($product->status === 'sold_out' && $product->stock_quantity > 0) {
-                $product->update(['status' => 'active']);
-            }
+            $product->refresh();
+            $productAfter = $product->stock_quantity;
 
             InventoryLog::create([
                 'product_id' => $product->id,
                 'sku_id' => $batch->sku_id,
                 'product_batch_id' => $batch->id,
                 'type' => 'adjust',
-                'quantity' => $diff,
+                'quantity' => $batch->is_sellable ? $diff : 0,
                 'before_quantity' => $beforeQty,
                 'after_quantity' => $newQuantity,
-                'remark' => $remark . ' [批次调整: ' . $batch->batch_no . ']',
+                'remark' => $remark . ' [批次调整: ' . $batch->batch_no . ']' . ($batch->is_sellable ? '' : '（不可售批次，不计入可售库存变动）'),
                 'operator_id' => auth()->id(),
             ]);
 
@@ -593,6 +546,9 @@ class InventoryService
                 'batch_id' => $batch->id,
                 'before' => $beforeQty,
                 'after' => $newQuantity,
+                'is_sellable' => $batch->is_sellable,
+                'product_before' => $productBefore,
+                'product_after' => $productAfter,
             ]);
 
             return $batch->fresh();
@@ -602,41 +558,36 @@ class InventoryService
     public function markBatchAsUnsellable(ProductBatch $batch, string $remark = ''): ProductBatch
     {
         return DB::transaction(function () use ($batch, $remark) {
+            $beforeQty = $batch->quantity;
+            $product = $batch->product;
+            $productBefore = $product->stock_quantity;
+
             $batch->update([
                 'is_sellable' => false,
             ]);
 
-            $product = $batch->product;
-            $sellableStock = (int) $product->sellableBatches()->sum('quantity');
-            $product->update(['stock_quantity' => $sellableStock]);
+            $this->recalculateSellableStock($product);
 
-            if ($batch->sku_id) {
-                $skuSellable = (int) ProductBatch::where('sku_id', $batch->sku_id)
-                    ->where('is_sellable', true)
-                    ->sum('quantity');
-                $sku = ProductSku::find($batch->sku_id);
-                if ($sku) {
-                    $sku->update(['stock_quantity' => $skuSellable]);
-                }
-            }
-
-            if ($sellableStock === 0) {
-                $product->update(['status' => 'sold_out']);
-            }
+            $product->refresh();
+            $productAfter = $product->stock_quantity;
 
             InventoryLog::create([
                 'product_id' => $product->id,
                 'sku_id' => $batch->sku_id,
                 'product_batch_id' => $batch->id,
                 'type' => 'adjust',
-                'quantity' => -$batch->quantity,
-                'before_quantity' => $batch->quantity,
-                'after_quantity' => 0,
+                'quantity' => -$beforeQty,
+                'before_quantity' => $productBefore,
+                'after_quantity' => $productAfter,
                 'remark' => $remark . ' [批次标记不可售: ' . $batch->batch_no . ']',
                 'operator_id' => auth()->id(),
             ]);
 
-            Log::info('批次标记不可售', ['batch_id' => $batch->id]);
+            Log::info('批次标记不可售', [
+                'batch_id' => $batch->id,
+                'batch_no' => $batch->batch_no,
+                'quantity' => $beforeQty,
+            ]);
 
             return $batch->fresh();
         });
@@ -649,5 +600,50 @@ class InventoryService
             ->when(is_null($skuId), fn($q) => $q->whereNull('sku_id'))
             ->where('is_sellable', true)
             ->sum('quantity');
+    }
+
+    public function recalculateSellableStock(Product $product): void
+    {
+        DB::transaction(function () use ($product) {
+            $productSellableQty = (int) ProductBatch::where('product_id', $product->id)
+                ->where('is_sellable', true)
+                ->sum('quantity');
+
+            $productHasBatches = ProductBatch::where('product_id', $product->id)->exists();
+
+            if ($productHasBatches) {
+                $product->update(['stock_quantity' => $productSellableQty]);
+
+                if ($productSellableQty === 0) {
+                    $product->update(['status' => 'sold_out']);
+                } elseif ($product->status === 'sold_out' && $productSellableQty > 0) {
+                    $product->update(['status' => 'active']);
+                }
+
+                $skus = $product->skus;
+                if ($skus->isNotEmpty()) {
+                    foreach ($skus as $sku) {
+                        $skuSellableQty = (int) ProductBatch::where('sku_id', $sku->id)
+                            ->where('is_sellable', true)
+                            ->sum('quantity');
+                        $sku->update(['stock_quantity' => $skuSellableQty]);
+                    }
+
+                    $skuTotal = $skus->sum('stock_quantity');
+                    $product->update(['stock_quantity' => $skuTotal]);
+
+                    if ($skuTotal === 0) {
+                        $product->update(['status' => 'sold_out']);
+                    } elseif ($product->status === 'sold_out' && $skuTotal > 0) {
+                        $product->update(['status' => 'active']);
+                    }
+                }
+            }
+
+            Log::info('重新计算可售库存', [
+                'product_id' => $product->id,
+                'stock_quantity' => $product->stock_quantity,
+            ]);
+        });
     }
 }

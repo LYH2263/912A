@@ -159,32 +159,81 @@ class ProductBatchRepository
             'expired' => 0,
             'expiring_soon' => 0,
             'back_to_normal' => 0,
+            'products_updated' => 0,
         ];
+
+        $affectedProductIds = [];
 
         ProductBatch::where('expiry_date', '<', $now)
             ->where('status', '!=', ProductBatch::STATUS_EXPIRED)
-            ->chunkById(100, function ($batches) use (&$updated) {
+            ->chunkById(100, function ($batches) use (&$updated, &$affectedProductIds) {
                 foreach ($batches as $batch) {
                     $batch->update([
                         'status' => ProductBatch::STATUS_EXPIRED,
                         'is_sellable' => false,
                     ]);
+                    $affectedProductIds[$batch->product_id] = true;
                     $updated['expired']++;
                 }
             });
 
         ProductBatch::whereBetween('expiry_date', [$now, $endDate])
             ->where('status', '!=', ProductBatch::STATUS_EXPIRING_SOON)
-            ->chunkById(100, function ($batches) use (&$updated) {
+            ->chunkById(100, function ($batches) use (&$updated, &$affectedProductIds) {
                 foreach ($batches as $batch) {
                     $batch->update([
                         'status' => ProductBatch::STATUS_EXPIRING_SOON,
                         'is_sellable' => true,
                     ]);
+                    $affectedProductIds[$batch->product_id] = true;
                     $updated['expiring_soon']++;
                 }
             });
 
+        $affectedProductIds = array_keys($affectedProductIds);
+        if (!empty($affectedProductIds)) {
+            foreach ($affectedProductIds as $productId) {
+                $this->syncProductSellableStock($productId);
+                $updated['products_updated']++;
+            }
+        }
+
         return $updated;
+    }
+
+    public function syncProductSellableStock(int $productId): void
+    {
+        $product = Product::find($productId);
+        if (!$product) {
+            return;
+        }
+
+        $hasBatches = ProductBatch::where('product_id', $productId)->exists();
+        if (!$hasBatches) {
+            return;
+        }
+
+        $sellableQty = (int) ProductBatch::where('product_id', $productId)
+            ->where('is_sellable', true)
+            ->sum('quantity');
+
+        $skus = $product->skus;
+        if ($skus->isNotEmpty()) {
+            foreach ($skus as $sku) {
+                $skuSellable = (int) ProductBatch::where('sku_id', $sku->id)
+                    ->where('is_sellable', true)
+                    ->sum('quantity');
+                $sku->update(['stock_quantity' => $skuSellable]);
+            }
+            $sellableQty = $skus->sum('stock_quantity');
+        }
+
+        $product->update(['stock_quantity' => $sellableQty]);
+
+        if ($sellableQty === 0) {
+            $product->update(['status' => 'sold_out']);
+        } elseif ($product->status === 'sold_out' && $sellableQty > 0) {
+            $product->update(['status' => 'active']);
+        }
     }
 }

@@ -151,13 +151,20 @@ class OrderService
                     $sku = ProductSku::findOrFail($itemData['product_sku_id']);
                     $product = $sku->product;
 
-                    $hasBatches = \App\Models\ProductBatch::where('product_id', $product->id)
+                    $isBatchManaged = \App\Models\ProductBatch::where('product_id', $product->id)
                         ->where('sku_id', $sku->id)
-                        ->where('is_sellable', true)
-                        ->where('quantity', '>', 0)
                         ->exists();
 
-                    if ($hasBatches) {
+                    if ($isBatchManaged) {
+                        $sellableQty = (int) \App\Models\ProductBatch::where('product_id', $product->id)
+                            ->where('sku_id', $sku->id)
+                            ->where('is_sellable', true)
+                            ->sum('quantity');
+
+                        if ($sellableQty < $itemData['quantity']) {
+                            throw new \Exception("商品 {$product->name} ({$sku->sku}) 可售批次库存不足，当前可售：{$sellableQty}，需要：{$itemData['quantity']}");
+                        }
+
                         $this->inventoryService->decreaseStockByFifo($product, $itemData['quantity'], $order->id, $sku->id, '订单创建');
                     } else {
                         $this->inventoryService->decreaseSkuStock($sku, $itemData['quantity'], $order->id, '订单创建');
@@ -165,13 +172,20 @@ class OrderService
                 } else {
                     $product = Product::findOrFail($itemData['product_id']);
 
-                    $hasBatches = \App\Models\ProductBatch::where('product_id', $product->id)
+                    $isBatchManaged = \App\Models\ProductBatch::where('product_id', $product->id)
                         ->whereNull('sku_id')
-                        ->where('is_sellable', true)
-                        ->where('quantity', '>', 0)
                         ->exists();
 
-                    if ($hasBatches) {
+                    if ($isBatchManaged) {
+                        $sellableQty = (int) \App\Models\ProductBatch::where('product_id', $product->id)
+                            ->whereNull('sku_id')
+                            ->where('is_sellable', true)
+                            ->sum('quantity');
+
+                        if ($sellableQty < $itemData['quantity']) {
+                            throw new \Exception("商品 {$product->name} 可售批次库存不足，当前可售：{$sellableQty}，需要：{$itemData['quantity']}");
+                        }
+
                         $this->inventoryService->decreaseStockByFifo($product, $itemData['quantity'], $order->id, null, '订单创建');
                     } else {
                         $this->inventoryService->decreaseStock($product, $itemData['quantity'], $order->id, '订单创建');
@@ -240,11 +254,11 @@ class OrderService
                 if ($sku) {
                     $product = $sku->product;
 
-                    $hasBatches = \App\Models\ProductBatch::where('product_id', $product->id)
+                    $isBatchManaged = \App\Models\ProductBatch::where('product_id', $product->id)
                         ->where('sku_id', $sku->id)
                         ->exists();
 
-                    if ($hasBatches) {
+                    if ($isBatchManaged) {
                         $this->inventoryService->restoreStockToBatches($product, $item->quantity, $order->id, $sku->id, '订单取消');
                     } else {
                         $this->inventoryService->increaseSkuStock($sku, $item->quantity, $order->id, '订单取消');
@@ -253,10 +267,11 @@ class OrderService
             } else {
                 $product = Product::findOrFail($item->product_id);
 
-                $hasBatches = \App\Models\ProductBatch::where('product_id', $product->id)
+                $isBatchManaged = \App\Models\ProductBatch::where('product_id', $product->id)
+                    ->whereNull('sku_id')
                     ->exists();
 
-                if ($hasBatches) {
+                if ($isBatchManaged) {
                     $this->inventoryService->restoreStockToBatches($product, $item->quantity, $order->id, null, '订单取消');
                 } else {
                     $this->inventoryService->increaseStock($product, $item->quantity, $order->id, '订单取消');
