@@ -177,8 +177,29 @@ class InventoryService
                 throw new \Exception('库存数量不能为负数');
             }
 
+            $skuCount = $product->skus()->count();
+            if ($skuCount > 0) {
+                $currentTotal = $product->skus()->sum('stock_quantity');
+                if ($newQuantity != $currentTotal) {
+                    throw new \Exception("该商品存在 {$skuCount} 个SKU配置，请通过SKU维度调整库存。当前SKU库存合计：{$currentTotal}");
+                }
+            }
+
             $beforeQuantity = $product->stock_quantity;
             $quantity = $newQuantity - $beforeQuantity;
+
+            if ($quantity == 0) {
+                $log = InventoryLog::create([
+                    'product_id' => $product->id,
+                    'type' => 'adjust',
+                    'quantity' => 0,
+                    'before_quantity' => $beforeQuantity,
+                    'after_quantity' => $newQuantity,
+                    'remark' => $remark . ' [无变化]',
+                    'operator_id' => auth()->id(),
+                ]);
+                return $log;
+            }
 
             $product->update(['stock_quantity' => $newQuantity]);
 
@@ -203,6 +224,55 @@ class InventoryService
                 'quantity' => $quantity,
                 'before' => $beforeQuantity,
                 'after' => $newQuantity,
+            ]);
+
+            return $log;
+        });
+    }
+
+    public function adjustSkuStock(ProductSku $sku, int $newQuantity, string $remark = ''): InventoryLog
+    {
+        return DB::transaction(function () use ($sku, $newQuantity, $remark) {
+            if ($newQuantity < 0) {
+                throw new \Exception('SKU库存数量不能为负数');
+            }
+
+            $beforeQuantity = $sku->stock_quantity;
+            $quantity = $newQuantity - $beforeQuantity;
+
+            $sku->update(['stock_quantity' => $newQuantity]);
+
+            $product = $sku->product;
+            $productTotalStock = $product->skus()->sum('stock_quantity');
+            $productBefore = $product->stock_quantity;
+            $product->update(['stock_quantity' => $productTotalStock]);
+
+            if ($productTotalStock === 0) {
+                $product->update(['status' => 'sold_out']);
+            } elseif ($product->status === 'sold_out' && $productTotalStock > 0) {
+                $product->update(['status' => 'active']);
+            }
+
+            $log = InventoryLog::create([
+                'product_id' => $product->id,
+                'sku_id' => $sku->id,
+                'type' => 'adjust',
+                'quantity' => $quantity,
+                'before_quantity' => $beforeQuantity,
+                'after_quantity' => $newQuantity,
+                'remark' => $remark . ' (SKU: ' . $sku->sku . ')',
+                'operator_id' => auth()->id(),
+            ]);
+
+            Log::info('SKU库存调整', [
+                'sku_id' => $sku->id,
+                'sku' => $sku->sku,
+                'product_id' => $product->id,
+                'quantity' => $quantity,
+                'sku_before' => $beforeQuantity,
+                'sku_after' => $newQuantity,
+                'product_before' => $productBefore,
+                'product_after' => $productTotalStock,
             ]);
 
             return $log;

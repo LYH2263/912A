@@ -19,23 +19,33 @@ class InventoryRepository
      */
     public function paginate(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = Product::with('category');
+        $query = Product::with(['category', 'skus'])
+            ->withCount('skus as sku_count')
+            ->withSum('skus as total_stock', 'stock_quantity')
+            ->withMin('skus as min_price', 'price')
+            ->withMax('skus as max_price', 'price');
 
         if (isset($filters['category_id'])) {
             $query->where('category_id', $filters['category_id']);
         }
 
-        // 缺货：库存为0
+        if (isset($filters['search'])) {
+            $search = $filters['search'];
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('sku', 'like', "%{$search}%")
+                  ->orWhereHas('skus', function ($sq) use ($search) {
+                      $sq->where('sku', 'like', "%{$search}%");
+                  });
+            });
+        }
+
         if (isset($filters['out_of_stock'])) {
             $query->where('stock_quantity', 0);
-        }
-        // 低库存：库存大于0且小于等于10
-        elseif (isset($filters['low_stock'])) {
+        } elseif (isset($filters['low_stock'])) {
             $query->where('stock_quantity', '>', 0)
                   ->where('stock_quantity', '<=', 10);
-        }
-        // 充足：库存大于10
-        elseif (isset($filters['sufficient'])) {
+        } elseif (isset($filters['sufficient'])) {
             $query->where('stock_quantity', '>', 10);
         }
 

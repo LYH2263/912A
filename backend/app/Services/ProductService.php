@@ -96,46 +96,54 @@ class ProductService
             }
 
             if ($specs !== null) {
-                $this->repository->saveSpecs($product, $specs);
+                if (empty($specs)) {
+                    $this->repository->clearSpecsAndSkus($product);
+                } else {
+                    $this->repository->saveSpecs($product, $specs);
+                }
             }
 
             if ($skus !== null) {
-                foreach ($skus as $sku) {
-                    if (empty($sku['id']) && ProductSku::where('sku', $sku['sku'])->exists()) {
-                        throw new \Exception("SKU {$sku['sku']} 已存在，请使用其他 SKU");
-                    }
-                    if (!empty($sku['id'])) {
-                        $existing = ProductSku::where('sku', $sku['sku'])
-                            ->where('id', '!=', $sku['id'])
-                            ->exists();
-                        if ($existing) {
+                if (empty($skus)) {
+                    $this->repository->clearSpecsAndSkus($product);
+                } else {
+                    foreach ($skus as $sku) {
+                        if (empty($sku['id']) && ProductSku::where('sku', $sku['sku'])->exists()) {
                             throw new \Exception("SKU {$sku['sku']} 已存在，请使用其他 SKU");
                         }
+                        if (!empty($sku['id'])) {
+                            $existing = ProductSku::where('sku', $sku['sku'])
+                                ->where('id', '!=', $sku['id'])
+                                ->exists();
+                            if ($existing) {
+                                throw new \Exception("SKU {$sku['sku']} 已存在，请使用其他 SKU");
+                            }
+                        }
                     }
-                }
-                $this->repository->saveSkus($product, $skus);
+                    $this->repository->saveSkus($product, $skus);
 
-                $product->refresh();
-                foreach ($product->skus as $sku) {
-                    if (isset($oldSkuPrices[$sku->id]) && abs($oldSkuPrices[$sku->id] - $sku->price) > 0.0001) {
+                    $product->refresh();
+                    foreach ($product->skus as $sku) {
+                        if (isset($oldSkuPrices[$sku->id]) && abs($oldSkuPrices[$sku->id] - $sku->price) > 0.0001) {
+                            $this->priceHistoryService->recordPriceChange(
+                                $product,
+                                (float) $oldSkuPrices[$sku->id],
+                                (float) $sku->price,
+                                $priceReason,
+                                $sku
+                            );
+                        }
+                    }
+
+                    $newProductPrice = $product->price;
+                    if (abs($oldProductPrice - $newProductPrice) > 0.0001 && !isset($data['price'])) {
                         $this->priceHistoryService->recordPriceChange(
                             $product,
-                            (float) $oldSkuPrices[$sku->id],
-                            (float) $sku->price,
-                            $priceReason,
-                            $sku
+                            (float) $oldProductPrice,
+                            (float) $newProductPrice,
+                            $priceReason ?: 'SKU价格变动导致商品均价调整'
                         );
                     }
-                }
-
-                $newProductPrice = $product->price;
-                if (abs($oldProductPrice - $newProductPrice) > 0.0001 && !isset($data['price'])) {
-                    $this->priceHistoryService->recordPriceChange(
-                        $product,
-                        (float) $oldProductPrice,
-                        (float) $newProductPrice,
-                        $priceReason ?: 'SKU价格变动导致商品均价调整'
-                    );
                 }
             }
 

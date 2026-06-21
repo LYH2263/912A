@@ -3,6 +3,7 @@
 namespace App\Repositories;
 
 use App\Models\Product;
+use App\Models\ProductBatch;
 use App\Models\ProductSku;
 use App\Models\ProductSpec;
 use App\Models\ProductSpecValue;
@@ -171,6 +172,25 @@ class ProductRepository
             if ($totalStock === 0 && $product->status === 'active') {
                 $product->update(['status' => 'sold_out']);
             } elseif ($totalStock > 0 && $product->status === 'sold_out') {
+                $product->update(['status' => 'active']);
+            }
+        });
+    }
+
+    public function clearSpecsAndSkus(Product $product): void
+    {
+        DB::transaction(function () use ($product) {
+            ProductBatch::where('product_id', $product->id)->whereNotNull('sku_id')->delete();
+            $product->skus()->delete();
+            $product->specs()->delete();
+
+            $product->update([
+                'stock_quantity' => $product->stock_quantity ?? 0,
+            ]);
+
+            if ($product->stock_quantity === 0 && $product->status === 'active') {
+                $product->update(['status' => 'sold_out']);
+            } elseif ($product->stock_quantity > 0 && $product->status === 'sold_out') {
                 $product->update(['status' => 'active']);
             }
         });

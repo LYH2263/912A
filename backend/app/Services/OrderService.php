@@ -40,7 +40,16 @@ class OrderService
                 }
 
                 if (!empty($item['product_sku_id'])) {
-                    $sku = ProductSku::findOrFail($item['product_sku_id']);
+                    $sku = ProductSku::find($item['product_sku_id']);
+                    if (!$sku) {
+                        throw new \Exception("SKU 不存在");
+                    }
+                    if ($sku->product_id !== $product->id) {
+                        throw new \Exception("SKU {$sku->sku} 不属于商品 {$product->name}");
+                    }
+                    if ($sku->status !== 'active') {
+                        throw new \Exception("SKU {$sku->sku} 已停用，无法购买");
+                    }
                     if (!$sku->hasEnoughStock($item['quantity'])) {
                         throw new \Exception("商品 {$product->name} ({$sku->sku}) 库存不足，当前库存：{$sku->stock_quantity}");
                     }
@@ -48,6 +57,9 @@ class OrderService
                     $skuCode = $sku->sku;
                     $specSnapshot = $sku->spec_data;
                 } else {
+                    if ($product->has_specs) {
+                        throw new \Exception("商品 {$product->name} 为多规格商品，请选择具体规格");
+                    }
                     if (!$product->hasEnoughStock($item['quantity'])) {
                         throw new \Exception("商品 {$product->name} 库存不足，当前库存：{$product->stock_quantity}");
                     }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use App\Models\ProductSku;
 use App\Repositories\InventoryRepository;
 use App\Services\InventoryService;
 use Illuminate\Http\JsonResponse;
@@ -22,7 +23,7 @@ class InventoryApiController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $filters = $request->only(['category_id', 'low_stock', 'out_of_stock', 'sufficient']);
+        $filters = $request->only(['category_id', 'low_stock', 'out_of_stock', 'sufficient', 'search']);
         $perPage = $request->get('per_page', 15);
 
         $inventory = $this->repository->paginate($filters, $perPage);
@@ -39,16 +40,16 @@ class InventoryApiController extends Controller
     }
 
     /**
-     * 获取商品库存详情
+     * 获取商品库存详情（含SKU）
      */
     public function show(Product $product): JsonResponse
     {
-        $product->load('category', 'inventoryLogs');
+        $product->load(['category', 'inventoryLogs', 'skus', 'specs.values']);
         return response()->json(['data' => $product]);
     }
 
     /**
-     * 更新库存数量
+     * 更新商品总库存数量
      */
     public function update(Request $request, Product $product): JsonResponse
     {
@@ -59,6 +60,24 @@ class InventoryApiController extends Controller
 
         try {
             $log = $this->service->adjustStock($product, $validated['quantity'], $validated['remark'] ?? '');
+            return response()->json(['data' => $log]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+    }
+
+    /**
+     * 更新SKU库存数量
+     */
+    public function updateSku(Request $request, ProductSku $sku): JsonResponse
+    {
+        $validated = $request->validate([
+            'quantity' => 'required|integer|min:0',
+            'remark' => 'nullable|string|max:500',
+        ]);
+
+        try {
+            $log = $this->service->adjustSkuStock($sku, $validated['quantity'], $validated['remark'] ?? '');
             return response()->json(['data' => $log]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);

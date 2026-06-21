@@ -18,10 +18,19 @@ export const inventoryApi = {
     })
   },
 
-  // 更新库存
+  // 更新商品总库存
   updateInventory(productId, data) {
     return request({
       url: `/inventory/${productId}`,
+      method: 'put',
+      data,
+    })
+  },
+
+  // 更新SKU库存
+  updateSkuInventory(skuId, data) {
+    return request({
+      url: `/inventory/sku/${skuId}`,
       method: 'put',
       data,
     })

@@ -64,6 +64,7 @@ Route::prefix('api')->group(function () {
         Route::get('inventory/statistics', [InventoryApiController::class, 'index']);
         Route::get('inventory/{product}', [InventoryApiController::class, 'show']);
         Route::put('inventory/{product}', [InventoryApiController::class, 'update']);
+        Route::put('inventory/sku/{sku}', [InventoryApiController::class, 'updateSku']);
 
         // 批次 API
         Route::get('product-batches/summary', [ProductBatchApiController::class, 'summary']);

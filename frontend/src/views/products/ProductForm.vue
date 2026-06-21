@@ -90,7 +90,7 @@
           <el-tab-pane label="规格与SKU" name="specs">
             <div class="spec-switch">
               <span>启用多规格</span>
-              <el-switch v-model="enableSpecs" />
+              <el-switch v-model="enableSpecs" @change="handleSpecSwitchChange" />
             </div>
             
             <div v-if="enableSpecs" class="spec-editor-wrapper">
@@ -212,7 +212,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { productApi } from '@/api/modules/product'
 import { supplierApi } from '@/api/modules/supplier'
@@ -288,6 +288,30 @@ const goToTagManager = () => {
   window.open(routeData.href, '_blank')
 }
 
+const handleSpecSwitchChange = async (val) => {
+  if (!val && isEdit.value && specData.specs.length > 0) {
+    try {
+      await ElMessageBox.confirm(
+        '关闭多规格后，将清除所有已配置的规格维度和SKU数据，此操作不可恢复。是否继续？',
+        '确认关闭多规格',
+        {
+          confirmButtonText: '确定关闭',
+          cancelButtonText: '取消',
+          type: 'warning',
+          confirmButtonClass: 'el-button--danger',
+        }
+      )
+    } catch (e) {
+      enableSpecs.value = true
+      return
+    }
+  }
+  if (!val) {
+    specData.specs = []
+    specData.skus = []
+  }
+}
+
 const loadPriceHistories = async () => {
   if (!route.params.id) return
   historyLoading.value = true
@@ -337,6 +361,9 @@ const handleSubmit = async () => {
           const prices = specData.skus.map((s) => parseFloat(s.price))
           submitData.price = Math.min(...prices)
           submitData.stock_quantity = specData.skus.reduce((sum, s) => sum + parseInt(s.stock_quantity || 0), 0)
+        } else if (isEdit.value) {
+          submitData.specs = []
+          submitData.skus = []
         }
 
         if (isEdit.value) {
