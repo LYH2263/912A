@@ -22,7 +22,7 @@ class OrderApiController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $filters = $request->only(['status', 'order_no', 'start_date', 'end_date']);
+        $filters = $request->only(['status', 'order_no', 'start_date', 'end_date', 'customer_id']);
         $perPage = $request->get('per_page', 15);
 
         $orders = $this->repository->paginate($filters, $perPage);
@@ -43,7 +43,7 @@ class OrderApiController extends Controller
      */
     public function show(Order $order): JsonResponse
     {
-        $order->load('orderItems.product', 'coupon');
+        $order->load('orderItems.product', 'coupon', 'customer');
         return response()->json(['data' => new OrderResource($order)]);
     }
 
@@ -57,6 +57,7 @@ class OrderApiController extends Controller
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.product_sku_id' => 'nullable|exists:product_skus,id',
             'items.*.quantity' => 'required|integer|min:1',
+            'customer_id' => 'nullable|exists:customers,id',
             'coupon_id' => 'nullable|exists:coupons,id',
             'discount_amount' => 'nullable|numeric|min:0',
             'shipping_address' => 'nullable|string',

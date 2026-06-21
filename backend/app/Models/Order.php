@@ -12,6 +12,7 @@ class Order extends Model
     use HasFactory;
 
     protected $fillable = [
+        'customer_id',
         'order_no',
         'user_id',
         'coupon_id',
@@ -38,6 +39,14 @@ class Order extends Model
         'completed_at' => 'datetime',
         'cancelled_at' => 'datetime',
     ];
+
+    /**
+     * 客户
+     */
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
+    }
 
     /**
      * 用户

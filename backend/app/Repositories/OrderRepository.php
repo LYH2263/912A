@@ -30,7 +30,7 @@ class OrderRepository
      */
     public function paginate(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = Order::with('orderItems.product');
+        $query = Order::with('orderItems.product', 'customer');
 
         if (isset($filters['status'])) {
             $query->where('status', $filters['status']);
@@ -38,6 +38,10 @@ class OrderRepository
 
         if (isset($filters['order_no'])) {
             $query->where('order_no', 'like', "%{$filters['order_no']}%");
+        }
+
+        if (isset($filters['customer_id'])) {
+            $query->where('customer_id', $filters['customer_id']);
         }
 
         if (isset($filters['start_date'])) {

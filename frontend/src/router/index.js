@@ -68,6 +68,26 @@ const routes = [
         component: () => import('../views/tags/TagList.vue'),
       },
       {
+        path: 'customers',
+        name: 'Customers',
+        component: () => import('../views/customers/CustomerList.vue'),
+      },
+      {
+        path: 'customers/create',
+        name: 'CustomerCreate',
+        component: () => import('../views/customers/CustomerForm.vue'),
+      },
+      {
+        path: 'customers/:id/edit',
+        name: 'CustomerEdit',
+        component: () => import('../views/customers/CustomerForm.vue'),
+      },
+      {
+        path: 'customers/:id',
+        name: 'CustomerDetail',
+        component: () => import('../views/customers/CustomerDetail.vue'),
+      },
+      {
         path: 'orders',
         name: 'Orders',
         component: () => import('../views/orders/OrderList.vue'),

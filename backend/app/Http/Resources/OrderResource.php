@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Http\Resources\CouponResource;
+use App\Http\Resources\CustomerResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -17,6 +18,7 @@ class OrderResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'customer_id' => $this->customer_id,
             'order_no' => $this->order_no,
             'user_id' => $this->user_id,
             'coupon_id' => $this->coupon_id,
@@ -34,6 +36,7 @@ class OrderResource extends JsonResource
             'cancelled_at' => $this->cancelled_at?->toDateTimeString(),
             'order_items' => OrderItemResource::collection($this->whenLoaded('orderItems')),
             'coupon' => new CouponResource($this->whenLoaded('coupon')),
+            'customer' => new CustomerResource($this->whenLoaded('customer')),
             'created_at' => $this->created_at?->toDateTimeString(),
             'updated_at' => $this->updated_at?->toDateTimeString(),
         ];

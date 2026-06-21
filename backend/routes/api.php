@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CouponApiController;
+use App\Http\Controllers\Api\CustomerApiController;
 use App\Http\Controllers\Api\DashboardApiController;
 use App\Http\Controllers\Api\InventoryAlertApiController;
 use App\Http\Controllers\Api\InventoryApiController;
@@ -46,6 +47,11 @@ Route::prefix('api')->group(function () {
         // 标签 API
         Route::get('tags/all', [TagApiController::class, 'all']);
         Route::apiResource('tags', TagApiController::class);
+
+        // 客户 API
+        Route::get('customers/search', [CustomerApiController::class, 'search']);
+        Route::get('customers/all', [CustomerApiController::class, 'all']);
+        Route::apiResource('customers', CustomerApiController::class);
 
         // 订单 API
         Route::apiResource('orders', OrderApiController::class);

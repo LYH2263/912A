@@ -150,6 +150,44 @@
         </el-form-item>
 
         <el-divider content-position="left">收货信息</el-divider>
+        <el-form-item label="选择客户">
+          <el-select
+            v-model="form.customer_id"
+            placeholder="搜索客户姓名或手机号"
+            filterable
+            remote
+            clearable
+            reserve-keyword
+            :remote-method="searchCustomers"
+            :loading="customerSearchLoading"
+            style="width: 400px"
+            @change="handleCustomerSelect"
+            @clear="handleCustomerClear"
+          >
+            <el-option
+              v-for="customer in customerOptions"
+              :key="customer.id"
+              :label="`${customer.name} - ${customer.phone}`"
+              :value="customer.id"
+            >
+              <div class="customer-option">
+                <span class="customer-name">{{ customer.name }}</span>
+                <span class="customer-phone">{{ customer.phone }}</span>
+                <span v-if="customer.order_count" class="customer-order-count">
+                  ({{ customer.order_count }}单)
+                </span>
+              </div>
+            </el-option>
+          </el-select>
+          <div v-if="selectedCustomerInfo" class="selected-customer-info">
+            <el-tag type="info" size="small">
+              {{ selectedCustomerInfo.order_count || 0 }} 单 / ¥{{ (selectedCustomerInfo.total_spent || 0).toFixed(2) }}
+            </el-tag>
+            <el-button type="primary" link size="small" @click="fillCustomerInfo">
+              填充客户地址信息
+            </el-button>
+          </div>
+        </el-form-item>
         <el-form-item label="收货人" prop="shipping_name">
           <el-input v-model="form.shipping_name" placeholder="请输入收货人姓名" />
         </el-form-item>
@@ -191,6 +229,7 @@ import { ElMessage } from 'element-plus'
 import { orderApi } from '@/api/modules/order'
 import { productApi } from '@/api/modules/product'
 import { couponApi } from '@/api/modules/coupon'
+import { customerApi } from '@/api/modules/customer'
 
 const router = useRouter()
 const formRef = ref(null)
@@ -198,6 +237,10 @@ const loading = ref(false)
 const products = ref([])
 const availableCoupons = ref([])
 const productDetailMap = ref({})
+const customerOptions = ref([])
+const customerSearchLoading = ref(false)
+const customerSearchTimeout = ref(null)
+const selectedCustomerInfo = ref(null)
 
 const form = reactive({
   items: [
@@ -207,6 +250,7 @@ const form = reactive({
       quantity: 1,
     },
   ],
+  customer_id: null,
   coupon_id: null,
   discount_amount: 0,
   shipping_name: '',
@@ -379,6 +423,61 @@ const handleCouponChange = () => {
   }
 }
 
+const searchCustomers = (query) => {
+  if (customerSearchTimeout.value) {
+    clearTimeout(customerSearchTimeout.value)
+  }
+  if (!query || query.trim().length === 0) {
+    customerOptions.value = []
+    return
+  }
+  customerSearchLoading.value = true
+  customerSearchTimeout.value = setTimeout(async () => {
+    try {
+      const res = await customerApi.searchCustomers(query.trim(), 30)
+      customerOptions.value = res.data || []
+    } catch (e) {
+      customerOptions.value = []
+    } finally {
+      customerSearchLoading.value = false
+    }
+  }, 300)
+}
+
+const handleCustomerSelect = async (customerId) => {
+  if (!customerId) {
+    selectedCustomerInfo.value = null
+    return
+  }
+  try {
+    const res = await customerApi.getCustomer(customerId)
+    selectedCustomerInfo.value = res.data
+    if (!form.shipping_name) {
+      form.shipping_name = res.data.name
+    }
+    if (!form.shipping_phone) {
+      form.shipping_phone = res.data.phone
+    }
+    if (!form.shipping_address && res.data.address) {
+      form.shipping_address = res.data.address
+    }
+  } catch (e) {
+    console.error('加载客户信息失败', e)
+  }
+}
+
+const handleCustomerClear = () => {
+  selectedCustomerInfo.value = null
+}
+
+const fillCustomerInfo = () => {
+  if (!selectedCustomerInfo.value) return
+  form.shipping_name = selectedCustomerInfo.value.name
+  form.shipping_phone = selectedCustomerInfo.value.phone
+  form.shipping_address = selectedCustomerInfo.value.address || ''
+  ElMessage.success('已填充客户信息')
+}
+
 const addItem = () => {
   form.items.push({
     product_id: null,
@@ -436,6 +535,7 @@ const handleSubmit = async () => {
           product_sku_id: item.product_sku_id || null,
           quantity: item.quantity,
         })),
+        customer_id: form.customer_id || null,
         coupon_id: form.coupon_id || null,
         discount_amount: couponDiscount.value || 0,
         shipping_name: form.shipping_name,
@@ -500,5 +600,33 @@ onMounted(() => {
   margin-top: 6px;
   font-size: 13px;
   color: #374151;
+}
+
+.customer-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.customer-option .customer-name {
+  font-weight: 500;
+  color: #111827;
+}
+
+.customer-option .customer-phone {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.customer-option .customer-order-count {
+  color: #6366f1;
+  font-size: 12px;
+}
+
+.selected-customer-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
 }
 </style>

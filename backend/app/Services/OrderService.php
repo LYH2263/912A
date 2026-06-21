@@ -3,11 +3,14 @@
 namespace App\Services;
 
 use App\Models\Coupon;
+use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductSku;
+use App\Repositories\CustomerRepository;
 use App\Repositories\OrderRepository;
+use App\Services\CustomerService;
 use App\Services\InventoryService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -16,7 +19,9 @@ class OrderService
 {
     public function __construct(
         public OrderRepository $repository,
-        private InventoryService $inventoryService
+        private InventoryService $inventoryService,
+        private CustomerService $customerService,
+        private CustomerRepository $customerRepository
     ) {
     }
 
@@ -86,7 +91,30 @@ class OrderService
 
             $orderNo = Order::generateOrderNo();
 
+            $customerId = $data['customer_id'] ?? null;
+            $shippingName = $data['shipping_name'] ?? null;
+            $shippingPhone = $data['shipping_phone'] ?? null;
+            $shippingAddress = $data['shipping_address'] ?? null;
+
+            if (!empty($data['customer_id'])) {
+                $customer = $this->customerRepository->find($data['customer_id']);
+                if ($customer) {
+                    $customerId = $customer->id;
+                    if (empty($shippingName)) $shippingName = $customer->name;
+                    if (empty($shippingPhone)) $shippingPhone = $customer->phone;
+                    if (empty($shippingAddress)) $shippingAddress = $customer->address;
+                }
+            } elseif (!empty($shippingName) && !empty($shippingPhone)) {
+                $customer = $this->customerService->findOrCreateByShippingInfo(
+                    $shippingName,
+                    $shippingPhone,
+                    $shippingAddress
+                );
+                $customerId = $customer->id;
+            }
+
             $order = $this->repository->create([
+                'customer_id' => $customerId,
                 'order_no' => $orderNo,
                 'user_id' => $data['user_id'] ?? null,
                 'coupon_id' => $couponId,
@@ -94,11 +122,15 @@ class OrderService
                 'discount_amount' => $discountAmount,
                 'final_amount' => $finalAmount,
                 'status' => 'pending',
-                'shipping_address' => $data['shipping_address'] ?? null,
-                'shipping_name' => $data['shipping_name'] ?? null,
-                'shipping_phone' => $data['shipping_phone'] ?? null,
+                'shipping_address' => $shippingAddress,
+                'shipping_name' => $shippingName,
+                'shipping_phone' => $shippingPhone,
                 'remark' => $data['remark'] ?? null,
             ]);
+
+            if ($customerId) {
+                $this->customerService->updateStats(Customer::find($customerId));
+            }
 
             foreach ($orderItems as $itemData) {
                 $orderItem = OrderItem::create(array_merge($itemData, ['order_id' => $order->id]));
