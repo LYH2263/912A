@@ -95,6 +95,10 @@ class ReviewService
 
     public function toggleVisibility(Review $review, User $operator): Review
     {
+        if ($review->status !== 'approved' && $review->status !== 'hidden') {
+            throw new \Exception('只有已通过或已隐藏的评价可以切换展示状态');
+        }
+
         $newStatus = $review->status === 'hidden' ? 'approved' : 'hidden';
         return $this->update($review, ['status' => $newStatus], $operator);
     }
@@ -109,9 +113,9 @@ class ReviewService
         return $this->repository->getProductSummary($productId);
     }
 
-    public function getAllProductsSummary()
+    public function getAllProductsSummary(array $productIds = [])
     {
-        return $this->repository->getAllProductsSummary();
+        return $this->repository->getAllProductsSummary($productIds);
     }
 
     public function getStatistics(): array

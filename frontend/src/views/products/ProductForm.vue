@@ -196,6 +196,102 @@
               </div>
             </div>
           </el-tab-pane>
+
+          <el-tab-pane v-if="isEdit" label="商品评价" name="reviews">
+            <div class="review-section">
+              <div v-if="reviewLoading" class="review-loading">
+                <el-skeleton :rows="5" animated />
+              </div>
+              <template v-else>
+                <div class="review-summary-card">
+                  <div class="summary-main">
+                    <div class="avg-score-box">
+                      <span class="avg-score">{{ reviewSummary.avg_rating || 0 }}</span>
+                      <span class="score-unit">/5.0</span>
+                    </div>
+                    <div class="avg-rate">
+                      <el-rate
+                        :model-value="reviewSummary.avg_rating"
+                        disabled
+                        :max="5"
+                        size="default"
+                      />
+                    </div>
+                    <div class="total-count">共 {{ reviewSummary.total_count || 0 }} 条评价</div>
+                  </div>
+                  <div v-if="reviewSummary.distribution" class="summary-distribution">
+                    <div
+                      v-for="(item, star) in reviewSummary.distribution"
+                      :key="star"
+                      class="distribution-item"
+                    >
+                      <span class="star-label">{{ star }}星</span>
+                      <el-progress
+                        :percentage="item.percent"
+                        :show-text="false"
+                        :stroke-width="8"
+                        color="#f59e0b"
+                      />
+                      <span class="count-label">{{ item.count }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="review-list-header">
+                  <span class="review-list-title">用户评价</span>
+                  <el-button type="primary" link @click="loadProductReviews">
+                    <el-icon><Refresh /></el-icon>
+                    刷新
+                  </el-button>
+                </div>
+
+                <div v-if="productReviews.length === 0" class="empty-reviews">
+                  <el-empty description="暂无评价" />
+                </div>
+                <div v-else class="review-items">
+                  <div
+                    v-for="review in productReviews"
+                    :key="review.id"
+                    class="review-item"
+                  >
+                    <div class="review-header">
+                      <div class="reviewer-info">
+                        <div class="reviewer-avatar">
+                          {{ getAvatarInitial(review) }}
+                        </div>
+                        <div class="reviewer-text">
+                          <div class="reviewer-name">
+                            {{ review.reviewer_name || (review.user ? (review.user.name || review.user.email) : '匿名用户') }}
+                          </div>
+                          <div class="review-time">{{ formatDateTime(review.created_at) }}</div>
+                        </div>
+                      </div>
+                      <el-rate
+                        :model-value="review.rating"
+                        disabled
+                        :max="5"
+                        size="small"
+                      />
+                    </div>
+                    <div v-if="review.content" class="review-content">
+                      {{ review.content }}
+                    </div>
+                  </div>
+                </div>
+
+                <el-pagination
+                  v-if="reviewTotal > 10"
+                  v-model:current-page="reviewPage"
+                  v-model:page-size="reviewPageSize"
+                  :total="reviewTotal"
+                  layout="prev, pager, next"
+                  small
+                  @current-change="loadProductReviews"
+                  style="margin-top: 16px; justify-content: center"
+                />
+              </template>
+            </div>
+          </el-tab-pane>
         </el-tabs>
 
         <el-form-item>
@@ -217,6 +313,7 @@ import { Refresh } from '@element-plus/icons-vue'
 import { productApi } from '@/api/modules/product'
 import { supplierApi } from '@/api/modules/supplier'
 import { tagApi } from '@/api/modules/tag'
+import { reviewApi } from '@/api/modules/review'
 import SpecMatrixEditor from '@/components/product/SpecMatrixEditor.vue'
 import dayjs from 'dayjs'
 
@@ -233,6 +330,12 @@ const allTags = ref([])
 const selectedTagIds = ref([])
 const priceHistories = ref([])
 const historyLoading = ref(false)
+const reviewSummary = ref({ avg_rating: 0, total_count: 0, distribution: {} })
+const productReviews = ref([])
+const reviewLoading = ref(false)
+const reviewPage = ref(1)
+const reviewPageSize = ref(10)
+const reviewTotal = ref(0)
 
 const form = reactive({
   name: '',
@@ -407,9 +510,36 @@ const loadProduct = async () => {
       }
 
       loadPriceHistories()
+      loadProductReviews()
     } catch (error) {
       ElMessage.error('获取商品信息失败')
     }
+  }
+}
+
+const getAvatarInitial = (review) => {
+  const name = review.reviewer_name || (review.user ? (review.user.name || review.user.email) : 'A')
+  return name.charAt(0).toUpperCase()
+}
+
+const loadProductReviews = async () => {
+  if (!route.params.id) return
+  reviewLoading.value = true
+  try {
+    const [summaryRes, reviewsRes] = await Promise.all([
+      reviewApi.getProductSummary(route.params.id),
+      reviewApi.getProductReviews(route.params.id, {
+        page: reviewPage.value,
+        per_page: reviewPageSize.value,
+      }),
+    ])
+    reviewSummary.value = summaryRes.data
+    productReviews.value = reviewsRes.data
+    reviewTotal.value = reviewsRes.meta.total
+  } catch (e) {
+    console.error('获取商品评价失败', e)
+  } finally {
+    reviewLoading.value = false
   }
 }
 
@@ -545,5 +675,167 @@ onMounted(() => {
 
 .empty-history {
   padding: 40px 0;
+}
+
+.review-section {
+  padding: 8px 0;
+}
+
+.review-loading {
+  padding: 20px 0;
+}
+
+.review-summary-card {
+  background: linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.summary-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.avg-score-box {
+  display: flex;
+  align-items: baseline;
+}
+
+.avg-score {
+  font-size: 40px;
+  font-weight: 700;
+  color: #d97706;
+  line-height: 1;
+}
+
+.score-unit {
+  font-size: 14px;
+  color: #9ca3af;
+  margin-left: 2px;
+}
+
+.avg-rate {
+  flex: 1;
+}
+
+.total-count {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.summary-distribution {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.distribution-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.star-label {
+  font-size: 12px;
+  color: #6b7280;
+  width: 36px;
+  flex-shrink: 0;
+}
+
+.distribution-item .el-progress {
+  flex: 1;
+}
+
+.count-label {
+  font-size: 12px;
+  color: #9ca3af;
+  width: 30px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.review-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.review-list-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.empty-reviews {
+  padding: 40px 0;
+}
+
+.review-items {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.review-item {
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 12px;
+}
+
+.review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.reviewer-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.reviewer-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4c6fff, #7c91ff);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.reviewer-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.reviewer-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+}
+
+.review-time {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.review-content {
+  font-size: 14px;
+  color: #4b5563;
+  line-height: 1.6;
+  padding: 8px 12px;
+  background: #fff;
+  border-radius: 8px;
 }
 </style>

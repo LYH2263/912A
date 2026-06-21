@@ -150,7 +150,7 @@
                 拒绝
               </el-button>
             </template>
-            <template v-else>
+            <template v-else-if="row.status === 'approved' || row.status === 'hidden'">
               <el-button
                 size="small"
                 :type="row.status === 'hidden' ? 'success' : 'info'"

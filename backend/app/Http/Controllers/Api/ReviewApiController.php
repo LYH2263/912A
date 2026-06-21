@@ -144,14 +144,14 @@ class ReviewApiController extends Controller
     public function productsSummary(Request $request): JsonResponse
     {
         $productIds = $request->get('product_ids', []);
-        $summaries = $this->service->getAllProductsSummary();
-
         if (!empty($productIds)) {
             $productIds = is_array($productIds) ? $productIds : explode(',', $productIds);
-            $summaries = $summaries->only($productIds);
+            $productIds = array_map('intval', $productIds);
         }
 
-        return response()->json(['data' => $summaries->values()]);
+        $summaries = $this->service->getAllProductsSummary($productIds);
+
+        return response()->json(['data' => $summaries]);
     }
 
     public function statistics(): JsonResponse

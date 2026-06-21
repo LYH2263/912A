@@ -3,9 +3,7 @@
 namespace App\Repositories;
 
 use App\Models\Review;
-use App\Models\Product;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
 class ReviewRepository
@@ -90,17 +88,40 @@ class ReviewRepository
         ];
     }
 
-    public function getAllProductsSummary(): Collection
+    public function getAllProductsSummary(array $productIds = []): array
     {
-        return Review::select(
+        $query = Review::select(
             'product_id',
             DB::raw('COUNT(*) as total_count'),
             DB::raw('ROUND(AVG(rating), 2) as avg_rating')
         )
             ->where('status', 'approved')
-            ->groupBy('product_id')
-            ->get()
-            ->keyBy('product_id');
+            ->groupBy('product_id');
+
+        if (!empty($productIds)) {
+            $query->whereIn('product_id', $productIds);
+        }
+
+        $existing = $query->get()->keyBy('product_id');
+
+        $result = [];
+        foreach ($productIds as $pid) {
+            if (isset($existing[$pid])) {
+                $result[] = [
+                    'product_id' => (int) $pid,
+                    'total_count' => (int) $existing[$pid]->total_count,
+                    'avg_rating' => (float) $existing[$pid]->avg_rating,
+                ];
+            } else {
+                $result[] = [
+                    'product_id' => (int) $pid,
+                    'total_count' => 0,
+                    'avg_rating' => 0,
+                ];
+            }
+        }
+
+        return $result;
     }
 
     public function getStatistics(): array
