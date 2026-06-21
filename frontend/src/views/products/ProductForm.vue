@@ -135,7 +135,7 @@
             <div class="price-history-section">
               <div class="history-header">
                 <span class="history-title">价格变动记录</span>
-                <el-button type="primary" link @click="loadPriceHistories">
+                <el-button type="primary" link @click="historyPage = 1; loadPriceHistories()">
                   <el-icon><Refresh /></el-icon>
                   刷新
                 </el-button>
@@ -191,6 +191,18 @@
                   </template>
                 </el-table-column>
               </el-table>
+              <div class="history-pagination" v-if="historyTotal > 0">
+                <el-pagination
+                  v-model:current-page="historyPage"
+                  v-model:page-size="historyPageSize"
+                  :page-sizes="[10, 20, 50, 100]"
+                  :total="historyTotal"
+                  layout="total, sizes, prev, pager, next, jumper"
+                  background
+                  @current-change="handleHistoryPageChange"
+                  @size-change="handleHistorySizeChange"
+                />
+              </div>
               <div v-if="priceHistories.length === 0 && !historyLoading" class="empty-history">
                 <el-empty description="暂无调价记录" />
               </div>
@@ -330,6 +342,9 @@ const allTags = ref([])
 const selectedTagIds = ref([])
 const priceHistories = ref([])
 const historyLoading = ref(false)
+const historyPage = ref(1)
+const historyPageSize = ref(10)
+const historyTotal = ref(0)
 const reviewSummary = ref({ avg_rating: 0, total_count: 0, distribution: {} })
 const productReviews = ref([])
 const reviewLoading = ref(false)
@@ -423,13 +438,28 @@ const loadPriceHistories = async () => {
   if (!route.params.id) return
   historyLoading.value = true
   try {
-    const res = await productApi.getPriceHistories(route.params.id, { per_page: 50 })
+    const res = await productApi.getPriceHistories(route.params.id, {
+      page: historyPage.value,
+      per_page: historyPageSize.value,
+    })
     priceHistories.value = res.data || []
+    historyTotal.value = res.meta?.total || 0
   } catch (e) {
     console.error('获取调价历史失败', e)
   } finally {
     historyLoading.value = false
   }
+}
+
+const handleHistoryPageChange = (page) => {
+  historyPage.value = page
+  loadPriceHistories()
+}
+
+const handleHistorySizeChange = (size) => {
+  historyPageSize.value = size
+  historyPage.value = 1
+  loadPriceHistories()
 }
 
 const handleSubmit = async () => {
@@ -684,6 +714,12 @@ onMounted(() => {
 
 .empty-history {
   padding: 40px 0;
+}
+
+.history-pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 16px;
 }
 
 .review-section {

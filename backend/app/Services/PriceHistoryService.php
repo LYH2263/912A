@@ -54,36 +54,47 @@ class PriceHistoryService
 
         $product = Product::find($productId);
         if (!$product) {
-            return ['dates' => [], 'prices' => []];
+            return [
+                'dates' => [],
+                'prices' => [],
+                'has_changes' => false,
+                'current_price' => 0,
+                'product_name' => '',
+            ];
+        }
+
+        $dates = [];
+        $prices = [];
+
+        if ($histories->count() === 0) {
+            return [
+                'dates' => [],
+                'prices' => [],
+                'has_changes' => false,
+                'current_price' => (float) $product->price,
+                'product_name' => $product->name,
+            ];
         }
 
         $startDate = now()->subDays($days)->startOfDay();
-        $endDate = now()->endOfDay();
-
-        $pricePoints = [];
 
         $firstHistory = $histories->first();
-        if ($firstHistory) {
-            $pricePoints[$startDate->format('Y-m-d')] = (float) $firstHistory->old_price;
-        } else {
-            $pricePoints[$startDate->format('Y-m-d')] = (float) $product->price;
-        }
+        $dates[] = $startDate->format('Y-m-d H:i');
+        $prices[] = (float) $firstHistory->old_price;
 
         foreach ($histories as $history) {
-            $date = $history->created_at->format('Y-m-d');
-            $pricePoints[$date] = (float) $history->new_price;
+            $dates[] = $history->created_at->format('Y-m-d H:i');
+            $prices[] = (float) $history->new_price;
         }
 
-        $pricePoints[$endDate->format('Y-m-d')] = (float) $product->price;
-
-        ksort($pricePoints);
-
-        $dates = array_keys($pricePoints);
-        $prices = array_values($pricePoints);
+        $endDate = now();
+        $dates[] = $endDate->format('Y-m-d H:i');
+        $prices[] = (float) $product->price;
 
         return [
             'dates' => $dates,
             'prices' => $prices,
+            'has_changes' => true,
             'current_price' => (float) $product->price,
             'product_name' => $product->name,
         ];

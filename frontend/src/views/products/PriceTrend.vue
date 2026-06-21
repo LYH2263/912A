@@ -164,7 +164,7 @@ const handleProductChange = () => {
 }
 
 const hasPriceData = computed(() => {
-  return trendData.value && trendData.value.dates && trendData.value.dates.length > 0
+  return trendData.value && trendData.value.has_changes && trendData.value.dates && trendData.value.dates.length > 0
 })
 
 const priceChangeCount = computed(() => {
