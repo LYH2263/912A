@@ -4,14 +4,12 @@ namespace App\Services;
 
 use App\Models\InventoryLog;
 use App\Models\Product;
+use App\Models\ProductSku;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class InventoryService
 {
-    /**
-     * 增加库存（入库）
-     */
     public function increaseStock(Product $product, int $quantity, ?int $orderId = null, string $remark = ''): InventoryLog
     {
         return DB::transaction(function () use ($product, $quantity, $orderId, $remark) {
@@ -42,9 +40,6 @@ class InventoryService
         });
     }
 
-    /**
-     * 减少库存（出库/销售）
-     */
     public function decreaseStock(Product $product, int $quantity, ?int $orderId = null, string $remark = ''): InventoryLog
     {
         return DB::transaction(function () use ($product, $quantity, $orderId, $remark) {
@@ -57,7 +52,6 @@ class InventoryService
 
             $product->update(['stock_quantity' => $afterQuantity]);
 
-            // 更新商品状态
             if ($afterQuantity === 0) {
                 $product->update(['status' => 'sold_out']);
             }
@@ -84,9 +78,86 @@ class InventoryService
         });
     }
 
-    /**
-     * 调整库存
-     */
+    public function increaseSkuStock(ProductSku $sku, int $quantity, ?int $orderId = null, string $remark = ''): void
+    {
+        DB::transaction(function () use ($sku, $quantity, $orderId, $remark) {
+            $beforeQuantity = $sku->stock_quantity;
+            $afterQuantity = $beforeQuantity + $quantity;
+
+            $sku->update(['stock_quantity' => $afterQuantity]);
+
+            $product = $sku->product;
+            $productTotalStock = $product->skus()->sum('stock_quantity');
+            $product->update(['stock_quantity' => $productTotalStock]);
+
+            if ($product->status === 'sold_out' && $productTotalStock > 0) {
+                $product->update(['status' => 'active']);
+            }
+
+            InventoryLog::create([
+                'product_id' => $product->id,
+                'sku_id' => $sku->id,
+                'type' => $orderId ? 'return' : 'in',
+                'quantity' => $quantity,
+                'before_quantity' => $beforeQuantity,
+                'after_quantity' => $afterQuantity,
+                'related_order_id' => $orderId,
+                'remark' => $remark . ' (SKU: ' . $sku->sku . ')',
+                'operator_id' => auth()->id(),
+            ]);
+
+            Log::info('SKU库存增加', [
+                'sku_id' => $sku->id,
+                'sku' => $sku->sku,
+                'quantity' => $quantity,
+                'before' => $beforeQuantity,
+                'after' => $afterQuantity,
+            ]);
+        });
+    }
+
+    public function decreaseSkuStock(ProductSku $sku, int $quantity, ?int $orderId = null, string $remark = ''): void
+    {
+        DB::transaction(function () use ($sku, $quantity, $orderId, $remark) {
+            if ($sku->stock_quantity < $quantity) {
+                throw new \Exception("SKU {$sku->sku} 库存不足，当前库存：{$sku->stock_quantity}");
+            }
+
+            $beforeQuantity = $sku->stock_quantity;
+            $afterQuantity = $beforeQuantity - $quantity;
+
+            $sku->update(['stock_quantity' => $afterQuantity]);
+
+            $product = $sku->product;
+            $productTotalStock = $product->skus()->sum('stock_quantity');
+            $product->update(['stock_quantity' => $productTotalStock]);
+
+            if ($productTotalStock === 0) {
+                $product->update(['status' => 'sold_out']);
+            }
+
+            InventoryLog::create([
+                'product_id' => $product->id,
+                'sku_id' => $sku->id,
+                'type' => $orderId ? 'sale' : 'out',
+                'quantity' => -$quantity,
+                'before_quantity' => $beforeQuantity,
+                'after_quantity' => $afterQuantity,
+                'related_order_id' => $orderId,
+                'remark' => $remark . ' (SKU: ' . $sku->sku . ')',
+                'operator_id' => auth()->id(),
+            ]);
+
+            Log::info('SKU库存减少', [
+                'sku_id' => $sku->id,
+                'sku' => $sku->sku,
+                'quantity' => $quantity,
+                'before' => $beforeQuantity,
+                'after' => $afterQuantity,
+            ]);
+        });
+    }
+
     public function adjustStock(Product $product, int $newQuantity, string $remark = ''): InventoryLog
     {
         return DB::transaction(function () use ($product, $newQuantity, $remark) {
@@ -99,7 +170,6 @@ class InventoryService
 
             $product->update(['stock_quantity' => $newQuantity]);
 
-            // 更新商品状态
             if ($newQuantity === 0) {
                 $product->update(['status' => 'sold_out']);
             } elseif ($product->status === 'sold_out' && $newQuantity > 0) {

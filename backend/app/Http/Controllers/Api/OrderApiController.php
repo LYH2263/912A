@@ -55,6 +55,7 @@ class OrderApiController extends Controller
         $validated = $request->validate([
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
+            'items.*.product_sku_id' => 'nullable|exists:product_skus,id',
             'items.*.quantity' => 'required|integer|min:1',
             'coupon_id' => 'nullable|exists:coupons,id',
             'discount_amount' => 'nullable|numeric|min:0',

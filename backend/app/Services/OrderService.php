@@ -6,6 +6,7 @@ use App\Models\Coupon;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\ProductSku;
 use App\Repositories\OrderRepository;
 use App\Services\InventoryService;
 use Illuminate\Support\Facades\DB;
@@ -19,30 +20,50 @@ class OrderService
     ) {
     }
 
-    /**
-     * 创建订单
-     */
     public function create(array $data): Order
     {
         return DB::transaction(function () use ($data) {
             $items = $data['items'];
+            $totalAmount = 0;
+            $orderItems = [];
+
             foreach ($items as $item) {
                 $product = Product::findOrFail($item['product_id']);
-                if (!$product->hasEnoughStock($item['quantity'])) {
-                    throw new \Exception("商品 {$product->name} 库存不足，当前库存：{$product->stock_quantity}");
-                }
+
                 if ($product->status !== 'active') {
                     throw new \Exception("商品 {$product->name} 已下架，无法购买");
                 }
-            }
 
-            $orderNo = Order::generateOrderNo();
+                if (!empty($item['product_sku_id'])) {
+                    $sku = ProductSku::findOrFail($item['product_sku_id']);
+                    if (!$sku->hasEnoughStock($item['quantity'])) {
+                        throw new \Exception("商品 {$product->name} ({$sku->sku}) 库存不足，当前库存：{$sku->stock_quantity}");
+                    }
+                    $price = $sku->price;
+                    $skuCode = $sku->sku;
+                    $specSnapshot = $sku->spec_data;
+                } else {
+                    if (!$product->hasEnoughStock($item['quantity'])) {
+                        throw new \Exception("商品 {$product->name} 库存不足，当前库存：{$product->stock_quantity}");
+                    }
+                    $price = $product->price;
+                    $skuCode = $product->sku;
+                    $specSnapshot = null;
+                }
 
-            $totalAmount = 0;
-            foreach ($items as $item) {
-                $product = Product::findOrFail($item['product_id']);
-                $subtotal = $product->price * $item['quantity'];
+                $subtotal = $price * $item['quantity'];
                 $totalAmount += $subtotal;
+
+                $orderItems[] = [
+                    'product_id' => $product->id,
+                    'product_sku_id' => $item['product_sku_id'] ?? null,
+                    'product_name' => $product->name,
+                    'product_sku' => $skuCode,
+                    'product_price' => $price,
+                    'quantity' => $item['quantity'],
+                    'subtotal' => $subtotal,
+                    'spec_snapshot' => $specSnapshot,
+                ];
             }
 
             $discountAmount = 0;
@@ -63,6 +84,8 @@ class OrderService
 
             $finalAmount = $totalAmount - $discountAmount;
 
+            $orderNo = Order::generateOrderNo();
+
             $order = $this->repository->create([
                 'order_no' => $orderNo,
                 'user_id' => $data['user_id'] ?? null,
@@ -77,21 +100,16 @@ class OrderService
                 'remark' => $data['remark'] ?? null,
             ]);
 
-            foreach ($items as $item) {
-                $product = Product::findOrFail($item['product_id']);
-                $subtotal = $product->price * $item['quantity'];
+            foreach ($orderItems as $itemData) {
+                $orderItem = OrderItem::create(array_merge($itemData, ['order_id' => $order->id]));
 
-                OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $product->id,
-                    'product_name' => $product->name,
-                    'product_sku' => $product->sku,
-                    'product_price' => $product->price,
-                    'quantity' => $item['quantity'],
-                    'subtotal' => $subtotal,
-                ]);
-
-                $this->inventoryService->decreaseStock($product, $item['quantity'], $order->id, '订单创建');
+                if (!empty($itemData['product_sku_id'])) {
+                    $sku = ProductSku::findOrFail($itemData['product_sku_id']);
+                    $this->inventoryService->decreaseSkuStock($sku, $itemData['quantity'], $order->id, '订单创建');
+                } else {
+                    $product = Product::findOrFail($itemData['product_id']);
+                    $this->inventoryService->decreaseStock($product, $itemData['quantity'], $order->id, '订单创建');
+                }
             }
 
             Log::info('订单创建成功', ['order_id' => $order->id, 'order_no' => $order->order_no]);
@@ -100,14 +118,10 @@ class OrderService
         });
     }
 
-    /**
-     * 更新订单状态
-     */
     public function updateStatus(Order $order, string $status): Order
     {
         $oldStatus = $order->status;
 
-        // 状态流转验证
         $allowedTransitions = [
             'pending' => ['paid', 'cancelled'],
             'paid' => ['shipped', 'cancelled'],
@@ -120,7 +134,6 @@ class OrderService
 
         $updateData = ['status' => $status];
 
-        // 记录状态变更时间
         switch ($status) {
             case 'paid':
                 $updateData['paid_at'] = now();
@@ -133,7 +146,6 @@ class OrderService
                 break;
             case 'cancelled':
                 $updateData['cancelled_at'] = now();
-                // 恢复库存
                 $this->restoreInventory($order);
                 break;
         }
@@ -149,14 +161,18 @@ class OrderService
         return $order;
     }
 
-    /**
-     * 恢复库存（订单取消时）
-     */
     private function restoreInventory(Order $order): void
     {
         foreach ($order->orderItems as $item) {
-            $product = Product::findOrFail($item->product_id);
-            $this->inventoryService->increaseStock($product, $item->quantity, $order->id, '订单取消');
+            if (!empty($item->product_sku_id)) {
+                $sku = ProductSku::find($item->product_sku_id);
+                if ($sku) {
+                    $this->inventoryService->increaseSkuStock($sku, $item->quantity, $order->id, '订单取消');
+                }
+            } else {
+                $product = Product::findOrFail($item->product_id);
+                $this->inventoryService->increaseStock($product, $item->quantity, $order->id, '订单取消');
+            }
         }
     }
 }

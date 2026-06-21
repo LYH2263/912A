@@ -71,6 +71,12 @@
           <el-table :data="order.order_items" border>
             <el-table-column prop="product_name" label="商品名称" />
             <el-table-column prop="product_sku" label="SKU" width="150" />
+            <el-table-column label="规格" width="200">
+              <template #default="{ row }">
+                <span v-if="row.spec_text" class="spec-text">{{ row.spec_text }}</span>
+                <span v-else class="no-spec">-</span>
+              </template>
+            </el-table-column>
             <el-table-column prop="product_price" label="单价" width="120">
               <template #default="{ row }">
                 ¥{{ row.product_price.toFixed(2) }}
@@ -220,6 +226,15 @@ onMounted(() => {
   font-size: 18px;
   font-weight: bold;
   color: #f56c6c;
+}
+
+.spec-text {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.no-spec {
+  color: #9ca3af;
 }
 
 .actions {

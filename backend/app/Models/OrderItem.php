@@ -15,17 +15,20 @@ class OrderItem extends Model
     protected $fillable = [
         'order_id',
         'product_id',
+        'product_sku_id',
         'product_name',
         'product_sku',
         'product_price',
         'quantity',
         'subtotal',
+        'spec_snapshot',
     ];
 
     protected $casts = [
         'product_price' => 'decimal:2',
         'subtotal' => 'decimal:2',
         'quantity' => 'integer',
+        'spec_snapshot' => 'array',
     ];
 
     /**
@@ -42,5 +45,13 @@ class OrderItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    /**
+     * SKU
+     */
+    public function sku(): BelongsTo
+    {
+        return $this->belongsTo(ProductSku::class, 'product_sku_id');
     }
 }

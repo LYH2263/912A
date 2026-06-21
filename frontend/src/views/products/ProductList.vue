@@ -14,14 +14,48 @@
       </template>
       
       <el-table :data="products" v-loading="loading" style="width: 100%">
-        <el-table-column prop="name" label="商品名称" width="200" />
-        <el-table-column prop="sku" label="SKU" width="150" />
-        <el-table-column prop="price" label="价格" width="100">
+        <el-table-column prop="name" label="商品名称" width="200">
           <template #default="{ row }">
-            ¥{{ row.price }}
+            <div class="product-name-cell">
+              <span class="name">{{ row.name }}</span>
+              <span class="spu-code">{{ row.sku }}</span>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column prop="stock_quantity" label="库存" width="100" />
+        <el-table-column label="规格" width="120">
+          <template #default="{ row }">
+            <el-tag v-if="row.has_specs" type="success" size="small">
+              {{ row.sku_count }} 个SKU
+            </el-tag>
+            <el-tag v-else type="info" size="small">
+              单规格
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="价格" width="140">
+          <template #default="{ row }">
+            <div v-if="row.has_specs" class="price-range">
+              <span class="price">¥{{ row.min_price?.toFixed(2) }}</span>
+              <span class="price-sep">~</span>
+              <span class="price">¥{{ row.max_price?.toFixed(2) }}</span>
+            </div>
+            <div v-else class="price-single">
+              <span class="price">¥{{ row.price?.toFixed(2) }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="库存" width="120">
+          <template #default="{ row }">
+            <div class="stock-info">
+              <span :class="{ 'low-stock': row.stock_quantity <= row.low_stock_threshold }">
+                {{ row.stock_quantity }}
+              </span>
+              <span v-if="row.has_specs" class="stock-sub">
+                ({{ row.sku_count }}个SKU)
+              </span>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="getStatusType(row.status)">
@@ -156,5 +190,61 @@ onMounted(() => {
 .card-subtitle {
   font-size: 12px;
   color: #6b7280;
+}
+
+.product-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.product-name-cell .name {
+  font-size: 14px;
+  color: #111827;
+  font-weight: 500;
+}
+
+.product-name-cell .spu-code {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.price-range {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.price {
+  font-size: 14px;
+  font-weight: 500;
+  color: #f56c6c;
+}
+
+.price-sep {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.price-single .price {
+  font-size: 14px;
+  font-weight: 500;
+  color: #f56c6c;
+}
+
+.stock-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stock-info .low-stock {
+  color: #e6a23c;
+  font-weight: 500;
+}
+
+.stock-sub {
+  font-size: 12px;
+  color: #9ca3af;
 }
 </style>

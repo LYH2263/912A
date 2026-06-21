@@ -17,10 +17,9 @@
         :rules="rules"
         label-width="120px"
       >
-        <!-- 订单商品 -->
         <el-form-item label="订单商品" prop="items">
           <el-table :data="form.items" border style="width: 100%">
-            <el-table-column label="商品" width="300">
+            <el-table-column label="商品" width="280">
               <template #default="{ row, $index }">
                 <el-select
                   v-model="row.product_id"
@@ -32,17 +31,37 @@
                   <el-option
                     v-for="product in availableProducts"
                     :key="product.id"
-                    :label="`${product.name} (${product.sku}) - 库存: ${product.stock_quantity}`"
+                    :label="`${product.name} (${product.sku})`"
                     :value="product.id"
                     :disabled="product.stock_quantity === 0 || product.status !== 'active'"
                   />
                 </el-select>
               </template>
             </el-table-column>
+            <el-table-column label="规格" width="220">
+              <template #default="{ row, $index }">
+                <el-select
+                  v-if="hasSpecs(row.product_id)"
+                  v-model="row.product_sku_id"
+                  placeholder="请选择规格"
+                  @change="handleSkuChange($index)"
+                  style="width: 100%"
+                >
+                  <el-option
+                    v-for="sku in getProductSkus(row.product_id)"
+                    :key="sku.id"
+                    :label="`${sku.spec_text || sku.sku} - 库存:${sku.stock_quantity}`"
+                    :value="sku.id"
+                    :disabled="sku.stock_quantity === 0 || sku.status !== 'active'"
+                  />
+                </el-select>
+                <span v-else class="no-spec-tip">单规格</span>
+              </template>
+            </el-table-column>
             <el-table-column label="单价" width="120">
               <template #default="{ row }">
-                <span v-if="row.product_id">
-                  ¥{{ getProductPrice(row.product_id).toFixed(2) }}
+                <span v-if="getItemPrice(row) !== null">
+                  ¥{{ getItemPrice(row).toFixed(2) }}
                 </span>
                 <span v-else>-</span>
               </template>
@@ -52,7 +71,7 @@
                 <el-input-number
                   v-model="row.quantity"
                   :min="1"
-                  :max="row.product_id ? Math.max(getProductStock(row.product_id), 1) : 999999"
+                  :max="getItemMaxStock(row)"
                   @change="calculateTotal"
                 />
               </template>
@@ -60,7 +79,7 @@
             <el-table-column label="小计" width="120">
               <template #default="{ row }">
                 <span v-if="row.product_id && row.quantity">
-                  ¥{{ (getProductPrice(row.product_id) * row.quantity).toFixed(2) }}
+                  ¥{{ (getItemPrice(row) * row.quantity).toFixed(2) }}
                 </span>
                 <span v-else>-</span>
               </template>
@@ -87,7 +106,6 @@
           </el-button>
         </el-form-item>
 
-        <!-- 优惠券选择 -->
         <el-form-item label="选择优惠券">
           <el-select
             v-model="form.coupon_id"
@@ -116,7 +134,6 @@
           </div>
         </el-form-item>
 
-        <!-- 订单金额 -->
         <el-form-item label="订单金额">
           <div style="font-size: 16px">
             <span>商品总额：¥{{ totalAmount.toFixed(2) }}</span>
@@ -132,7 +149,6 @@
           </div>
         </el-form-item>
 
-        <!-- 收货信息 -->
         <el-divider content-position="left">收货信息</el-divider>
         <el-form-item label="收货人" prop="shipping_name">
           <el-input v-model="form.shipping_name" placeholder="请输入收货人姓名" />
@@ -181,11 +197,13 @@ const formRef = ref(null)
 const loading = ref(false)
 const products = ref([])
 const availableCoupons = ref([])
+const productDetailMap = ref({})
 
 const form = reactive({
   items: [
     {
       product_id: null,
+      product_sku_id: null,
       quantity: 1,
     },
   ],
@@ -208,6 +226,10 @@ const rules = {
         for (let i = 0; i < value.length; i++) {
           if (!value[i].product_id) {
             callback(new Error('请选择商品'))
+            return
+          }
+          if (hasSpecs(value[i].product_id) && !value[i].product_sku_id) {
+            callback(new Error('请选择商品规格'))
             return
           }
           if (!value[i].quantity || value[i].quantity < 1) {
@@ -245,8 +267,8 @@ const availableProducts = computed(() => {
 const totalAmount = computed(() => {
   let total = 0
   form.items.forEach((item) => {
-    if (item.product_id && item.quantity) {
-      const price = getProductPrice(item.product_id)
+    const price = getItemPrice(item)
+    if (price !== null && item.quantity) {
       total += price * item.quantity
     }
   })
@@ -273,14 +295,42 @@ const selectedCouponInfo = computed(() => {
   return availableCoupons.value.find((c) => c.id === form.coupon_id) || null
 })
 
-const getProductPrice = (productId) => {
+const hasSpecs = (productId) => {
+  if (!productId) return false
   const product = products.value.find((p) => p.id === productId)
-  return product ? product.price : 0
+  return product ? product.has_specs : false
 }
 
-const getProductStock = (productId) => {
-  const product = products.value.find((p) => p.id === productId)
-  return product ? product.stock_quantity : 0
+const getProductSkus = (productId) => {
+  if (!productId) return []
+  const product = productDetailMap.value[productId]
+  return product ? product.skus || [] : []
+}
+
+const getItemPrice = (item) => {
+  if (!item.product_id) return null
+  
+  if (item.product_sku_id) {
+    const skus = getProductSkus(item.product_id)
+    const sku = skus.find((s) => s.id === item.product_sku_id)
+    return sku ? sku.price : null
+  }
+  
+  const product = products.value.find((p) => p.id === item.product_id)
+  return product ? product.price : null
+}
+
+const getItemMaxStock = (item) => {
+  if (!item.product_id) return 999999
+  
+  if (item.product_sku_id) {
+    const skus = getProductSkus(item.product_id)
+    const sku = skus.find((s) => s.id === item.product_sku_id)
+    return sku ? Math.max(sku.stock_quantity, 1) : 999999
+  }
+  
+  const product = products.value.find((p) => p.id === item.product_id)
+  return product ? Math.max(product.stock_quantity, 1) : 999999
 }
 
 const getCouponLabel = (coupon) => {
@@ -289,14 +339,33 @@ const getCouponLabel = (coupon) => {
   return `${coupon.name} - ${discount} ${minStr}`
 }
 
-const handleProductChange = (index) => {
+const handleProductChange = async (index) => {
   const item = form.items[index]
-  if (item.product_id) {
-    const stock = getProductStock(item.product_id)
-    if (item.quantity > stock) {
-      item.quantity = stock
-      ElMessage.warning('数量不能超过库存')
+  item.product_sku_id = null
+  
+  if (item.product_id && !productDetailMap.value[item.product_id]) {
+    try {
+      const res = await productApi.getProduct(item.product_id)
+      productDetailMap.value[item.product_id] = res.data
+    } catch (e) {
+      console.error('加载商品详情失败', e)
     }
+  }
+  
+  const stock = getItemMaxStock(item)
+  if (item.quantity > stock) {
+    item.quantity = stock
+    ElMessage.warning('数量不能超过库存')
+  }
+  calculateTotal()
+}
+
+const handleSkuChange = (index) => {
+  const item = form.items[index]
+  const stock = getItemMaxStock(item)
+  if (item.quantity > stock) {
+    item.quantity = stock
+    ElMessage.warning('数量不能超过库存')
   }
   calculateTotal()
 }
@@ -313,6 +382,7 @@ const handleCouponChange = () => {
 const addItem = () => {
   form.items.push({
     product_id: null,
+    product_sku_id: null,
     quantity: 1,
   })
 }
@@ -363,6 +433,7 @@ const handleSubmit = async () => {
       const orderData = {
         items: form.items.map((item) => ({
           product_id: item.product_id,
+          product_sku_id: item.product_sku_id || null,
           quantity: item.quantity,
         })),
         coupon_id: form.coupon_id || null,
@@ -415,6 +486,11 @@ onMounted(() => {
 .card-subtitle {
   font-size: 12px;
   color: #6b7280;
+}
+
+.no-spec-tip {
+  font-size: 13px;
+  color: #9ca3af;
 }
 
 .coupon-info {

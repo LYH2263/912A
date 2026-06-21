@@ -17,9 +17,6 @@ class ProductApiController extends Controller
     ) {
     }
 
-    /**
-     * 获取商品列表
-     */
     public function index(Request $request): JsonResponse
     {
         $filters = $request->only(['category_id', 'status', 'search']);
@@ -38,23 +35,17 @@ class ProductApiController extends Controller
         ]);
     }
 
-    /**
-     * 获取商品详情
-     */
     public function show(Product $product): JsonResponse
     {
-        $product->load('category', 'inventoryLogs');
-        return response()->json(['data' => new ProductResource($product)]);
+        $productWithSpecs = $this->service->getProductWithSpecs($product->id);
+        return response()->json(['data' => new ProductResource($productWithSpecs)]);
     }
 
-    /**
-     * 创建商品
-     */
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'name' => 'required|string|max:200',
-            'sku' => 'required|string|max:100|unique:products,sku',
+            'sku' => 'required|string|max:100',
             'category_id' => 'nullable|exists:categories,id',
             'description' => 'nullable|string',
             'price' => 'required|numeric|min:0',
@@ -64,6 +55,18 @@ class ProductApiController extends Controller
             'stock_quantity' => 'nullable|integer|min:0',
             'low_stock_threshold' => 'nullable|integer|min:0',
             'weight' => 'nullable|numeric|min:0',
+            'specs' => 'nullable|array',
+            'specs.*.name' => 'required|string|max:50',
+            'specs.*.values' => 'required|array|min:1',
+            'specs.*.values.*' => 'required|string|max:100',
+            'skus' => 'nullable|array',
+            'skus.*.sku' => 'required|string|max:100',
+            'skus.*.price' => 'required|numeric|min:0',
+            'skus.*.cost_price' => 'nullable|numeric|min:0',
+            'skus.*.stock_quantity' => 'nullable|integer|min:0',
+            'skus.*.image' => 'nullable|string|max:255',
+            'skus.*.spec_data' => 'nullable|array',
+            'skus.*.status' => 'nullable|in:active,inactive',
         ]);
 
         try {
@@ -74,14 +77,11 @@ class ProductApiController extends Controller
         }
     }
 
-    /**
-     * 更新商品
-     */
     public function update(Request $request, Product $product): JsonResponse
     {
         $validated = $request->validate([
             'name' => 'sometimes|string|max:200',
-            'sku' => 'sometimes|string|max:100|unique:products,sku,' . $product->id,
+            'sku' => 'sometimes|string|max:100',
             'category_id' => 'nullable|exists:categories,id',
             'description' => 'nullable|string',
             'price' => 'sometimes|numeric|min:0',
@@ -92,6 +92,19 @@ class ProductApiController extends Controller
             'stock_quantity' => 'nullable|integer|min:0',
             'low_stock_threshold' => 'nullable|integer|min:0',
             'weight' => 'nullable|numeric|min:0',
+            'specs' => 'nullable|array',
+            'specs.*.name' => 'required|string|max:50',
+            'specs.*.values' => 'required|array|min:1',
+            'specs.*.values.*' => 'required|string|max:100',
+            'skus' => 'nullable|array',
+            'skus.*.id' => 'nullable|integer',
+            'skus.*.sku' => 'required|string|max:100',
+            'skus.*.price' => 'required|numeric|min:0',
+            'skus.*.cost_price' => 'nullable|numeric|min:0',
+            'skus.*.stock_quantity' => 'nullable|integer|min:0',
+            'skus.*.image' => 'nullable|string|max:255',
+            'skus.*.spec_data' => 'nullable|array',
+            'skus.*.status' => 'nullable|in:active,inactive',
         ]);
 
         try {
@@ -102,9 +115,6 @@ class ProductApiController extends Controller
         }
     }
 
-    /**
-     * 删除商品
-     */
     public function destroy(Product $product): JsonResponse
     {
         try {

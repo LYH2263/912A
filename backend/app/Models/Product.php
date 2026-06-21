@@ -53,11 +53,90 @@ class Product extends Model
     }
 
     /**
+     * 规格
+     */
+    public function specs(): HasMany
+    {
+        return $this->hasMany(ProductSpec::class)->orderBy('sort');
+    }
+
+    /**
+     * SKU列表
+     */
+    public function skus(): HasMany
+    {
+        return $this->hasMany(ProductSku::class);
+    }
+
+    /**
      * 库存变动记录
      */
     public function inventoryLogs(): HasMany
     {
         return $this->hasMany(InventoryLog::class);
+    }
+
+    /**
+     * SKU总数
+     */
+    public function getSkuCountAttribute(): int
+    {
+        if ($this->relationLoaded('skus')) {
+            return $this->skus->count();
+        }
+        if (array_key_exists('sku_count', $this->attributes)) {
+            return (int) $this->attributes['sku_count'];
+        }
+        return $this->skus()->count();
+    }
+
+    /**
+     * 总库存
+     */
+    public function getTotalStockAttribute(): int
+    {
+        if (array_key_exists('total_stock', $this->attributes)) {
+            return (int) $this->attributes['total_stock'];
+        }
+        return (int) $this->skus()->sum('stock_quantity');
+    }
+
+    /**
+     * 最低价格
+     */
+    public function getMinPriceAttribute(): ?float
+    {
+        if (array_key_exists('min_price', $this->attributes)) {
+            return $this->attributes['min_price'] ? (float) $this->attributes['min_price'] : null;
+        }
+        $sku = $this->skus()->orderBy('price', 'asc')->first();
+        return $sku ? (float) $sku->price : null;
+    }
+
+    /**
+     * 最高价格
+     */
+    public function getMaxPriceAttribute(): ?float
+    {
+        if (array_key_exists('max_price', $this->attributes)) {
+            return $this->attributes['max_price'] ? (float) $this->attributes['max_price'] : null;
+        }
+        $sku = $this->skus()->orderBy('price', 'desc')->first();
+        return $sku ? (float) $sku->price : null;
+    }
+
+    /**
+     * 是否有规格
+     */
+    public function getHasSpecsAttribute(): bool
+    {
+        if ($this->relationLoaded('specs')) {
+            return $this->specs->count() > 0;
+        }
+        if (array_key_exists('sku_count', $this->attributes)) {
+            return (int) $this->attributes['sku_count'] > 0;
+        }
+        return $this->specs()->count() > 0;
     }
 
     /**

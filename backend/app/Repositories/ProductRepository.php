@@ -3,34 +3,33 @@
 namespace App\Repositories;
 
 use App\Models\Product;
+use App\Models\ProductSku;
+use App\Models\ProductSpec;
+use App\Models\ProductSpecValue;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 
 class ProductRepository
 {
-    /**
-     * 创建商品
-     */
     public function create(array $data): Product
     {
         return Product::create($data);
     }
 
-    /**
-     * 更新商品
-     */
     public function update(Product $product, array $data): Product
     {
         $product->update($data);
         return $product->fresh();
     }
 
-    /**
-     * 获取商品列表（分页）
-     */
     public function paginate(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = Product::with('category');
+        $query = Product::with('category')
+            ->withCount('skus as sku_count')
+            ->withMin('skus as min_price', 'price')
+            ->withMax('skus as max_price', 'price')
+            ->withSum('skus as total_stock', 'stock_quantity');
 
         if (isset($filters['category_id'])) {
             $query->where('category_id', $filters['category_id']);
@@ -50,9 +49,6 @@ class ProductRepository
         return $query->orderBy('created_at', 'desc')->paginate($perPage);
     }
 
-    /**
-     * 获取所有商品
-     */
     public function all(array $filters = []): Collection
     {
         $query = Product::with('category');
@@ -64,17 +60,16 @@ class ProductRepository
         return $query->get();
     }
 
-    /**
-     * 根据ID获取商品
-     */
     public function find(int $id): ?Product
     {
         return Product::with('category')->find($id);
     }
 
-    /**
-     * 检查SKU是否存在
-     */
+    public function findWithSpecs(int $id): ?Product
+    {
+        return Product::with(['category', 'specs.values', 'skus'])->find($id);
+    }
+
     public function existsBySku(string $sku, ?int $excludeId = null): bool
     {
         $query = Product::where('sku', $sku);
@@ -84,5 +79,93 @@ class ProductRepository
         }
 
         return $query->exists();
+    }
+
+    public function saveSpecs(Product $product, array $specs): void
+    {
+        DB::transaction(function () use ($product, $specs) {
+            $product->specs()->delete();
+
+            foreach ($specs as $specIndex => $spec) {
+                $productSpec = $product->specs()->create([
+                    'name' => $spec['name'],
+                    'sort' => $specIndex,
+                ]);
+
+                foreach ($spec['values'] as $valueIndex => $value) {
+                    $productSpec->values()->create([
+                        'value' => $value,
+                        'sort' => $valueIndex,
+                    ]);
+                }
+            }
+        });
+    }
+
+    public function saveSkus(Product $product, array $skus): void
+    {
+        DB::transaction(function () use ($product, $skus) {
+            $existingSkuIds = $product->skus->pluck('id')->toArray();
+
+            foreach ($skus as $skuData) {
+                if (isset($skuData['id']) && in_array($skuData['id'], $existingSkuIds)) {
+                    $sku = ProductSku::find($skuData['id']);
+                    $sku->update([
+                        'sku' => $skuData['sku'],
+                        'price' => $skuData['price'],
+                        'cost_price' => $skuData['cost_price'] ?? null,
+                        'stock_quantity' => $skuData['stock_quantity'] ?? 0,
+                        'image' => $skuData['image'] ?? null,
+                        'spec_data' => $skuData['spec_data'] ?? null,
+                        'status' => $skuData['status'] ?? 'active',
+                    ]);
+                } else {
+                    $product->skus()->create([
+                        'sku' => $skuData['sku'],
+                        'price' => $skuData['price'],
+                        'cost_price' => $skuData['cost_price'] ?? null,
+                        'stock_quantity' => $skuData['stock_quantity'] ?? 0,
+                        'image' => $skuData['image'] ?? null,
+                        'spec_data' => $skuData['spec_data'] ?? null,
+                        'status' => $skuData['status'] ?? 'active',
+                    ]);
+                }
+            }
+
+            $newSkuIds = collect($skus)->pluck('id')->filter()->toArray();
+            $toDeleteIds = array_diff($existingSkuIds, $newSkuIds);
+            if (!empty($toDeleteIds)) {
+                ProductSku::whereIn('id', $toDeleteIds)->delete();
+            }
+
+            $product->refresh();
+            $totalStock = $product->skus->sum('stock_quantity');
+            $minPrice = $product->skus->min('price');
+            $product->update([
+                'stock_quantity' => $totalStock,
+                'price' => $minPrice ?? $product->price,
+            ]);
+
+            if ($totalStock === 0 && $product->status === 'active') {
+                $product->update(['status' => 'sold_out']);
+            } elseif ($totalStock > 0 && $product->status === 'sold_out') {
+                $product->update(['status' => 'active']);
+            }
+        });
+    }
+
+    public function findSkuById(int $skuId): ?ProductSku
+    {
+        return ProductSku::find($skuId);
+    }
+
+    public function decreaseSkuStock(ProductSku $sku, int $quantity): void
+    {
+        $sku->decrement('stock_quantity', $quantity);
+    }
+
+    public function increaseSkuStock(ProductSku $sku, int $quantity): void
+    {
+        $sku->increment('stock_quantity', $quantity);
     }
 }
