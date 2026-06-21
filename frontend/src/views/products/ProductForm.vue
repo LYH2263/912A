@@ -34,6 +34,16 @@
                 />
               </el-select>
             </el-form-item>
+            <el-form-item label="供应商" prop="supplier_id">
+              <el-select v-model="form.supplier_id" placeholder="请选择供应商" clearable style="width: 300px">
+                <el-option
+                  v-for="supplier in suppliers"
+                  :key="supplier.id"
+                  :label="supplier.name"
+                  :value="supplier.id"
+                />
+              </el-select>
+            </el-form-item>
             <el-form-item label="商品描述" prop="description">
               <el-input
                 v-model="form.description"
@@ -101,6 +111,7 @@ import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { productApi } from '@/api/modules/product'
+import { supplierApi } from '@/api/modules/supplier'
 import SpecMatrixEditor from '@/components/product/SpecMatrixEditor.vue'
 
 const route = useRoute()
@@ -111,11 +122,13 @@ const isEdit = ref(false)
 const activeTab = ref('basic')
 const enableSpecs = ref(false)
 const categories = ref([])
+const suppliers = ref([])
 
 const form = reactive({
   name: '',
   sku: '',
   category_id: null,
+  supplier_id: null,
   description: '',
   price: 0,
   cost_price: null,
@@ -141,6 +154,15 @@ const fetchCategories = async () => {
   try {
     const { default: Category } = await import('@/api/modules/product.js')
   } catch (e) {
+  }
+}
+
+const fetchSuppliers = async () => {
+  try {
+    const res = await supplierApi.getAllSuppliers({ status: 'active' })
+    suppliers.value = res.data
+  } catch (e) {
+    console.error('获取供应商列表失败', e)
   }
 }
 
@@ -222,6 +244,7 @@ const loadProduct = async () => {
 }
 
 onMounted(() => {
+  fetchSuppliers()
   loadProduct()
 })
 </script>

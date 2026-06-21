@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\InventoryApiController;
 use App\Http\Controllers\Api\OrderApiController;
 use App\Http\Controllers\Api\ProductApiController;
 use App\Http\Controllers\Api\ReviewApiController;
+use App\Http\Controllers\Api\SupplierApiController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -25,6 +26,12 @@ Route::prefix('api')->group(function () {
         // 用户信息
         Route::get('me', [AuthController::class, 'me']);
         Route::post('logout', [AuthController::class, 'logout']);
+
+        // 供应商 API
+        Route::get('suppliers/all', [SupplierApiController::class, 'all']);
+        Route::post('suppliers/{supplier}/toggle-status', [SupplierApiController::class, 'toggleStatus']);
+        Route::get('suppliers/{supplier}/product-count', [SupplierApiController::class, 'getProductCount']);
+        Route::apiResource('suppliers', SupplierApiController::class);
 
         // 商品 API
         Route::apiResource('products', ProductApiController::class);

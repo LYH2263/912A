@@ -19,7 +19,7 @@ class ProductApiController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $filters = $request->only(['category_id', 'status', 'search']);
+        $filters = $request->only(['category_id', 'supplier_id', 'status', 'search']);
         $perPage = $request->get('per_page', 15);
 
         $products = $this->repository->paginate($filters, $perPage);
@@ -47,6 +47,7 @@ class ProductApiController extends Controller
             'name' => 'required|string|max:200',
             'sku' => 'required|string|max:100',
             'category_id' => 'nullable|exists:categories,id',
+            'supplier_id' => 'nullable|exists:suppliers,id',
             'description' => 'nullable|string',
             'price' => 'required|numeric|min:0',
             'cost_price' => 'nullable|numeric|min:0',
@@ -83,6 +84,7 @@ class ProductApiController extends Controller
             'name' => 'sometimes|string|max:200',
             'sku' => 'sometimes|string|max:100',
             'category_id' => 'nullable|exists:categories,id',
+            'supplier_id' => 'nullable|exists:suppliers,id',
             'description' => 'nullable|string',
             'price' => 'sometimes|numeric|min:0',
             'cost_price' => 'nullable|numeric|min:0',

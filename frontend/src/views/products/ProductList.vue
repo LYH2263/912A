@@ -12,8 +12,19 @@
           </el-button>
         </div>
       </template>
+
+      <div class="filter-bar">
+        <el-select v-model="supplierFilter" placeholder="供应商" clearable style="width: 200px" @change="handleSearch">
+          <el-option
+            v-for="supplier in suppliers"
+            :key="supplier.id"
+            :label="supplier.name"
+            :value="supplier.id"
+          />
+        </el-select>
+      </div>
       
-      <el-table :data="products" v-loading="loading" style="width: 100%">
+      <el-table :data="products" v-loading="loading" style="width: 100%; margin-top: 16px">
         <el-table-column prop="name" label="商品名称" width="200">
           <template #default="{ row }">
             <div class="product-name-cell">
@@ -30,6 +41,16 @@
             <el-tag v-else type="info" size="small">
               单规格
             </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="供应商" width="160">
+          <template #default="{ row }">
+            <span v-if="row.supplier" class="supplier-name">
+              {{ row.supplier.name }}
+            </span>
+            <span v-else class="supplier-empty">
+              未关联
+            </span>
           </template>
         </el-table-column>
         <el-table-column label="价格" width="140">
@@ -210,14 +231,17 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { productApi } from '@/api/modules/product'
 import { reviewApi } from '@/api/modules/review'
+import { supplierApi } from '@/api/modules/supplier'
 import dayjs from 'dayjs'
 
 const router = useRouter()
 const products = ref([])
+const suppliers = ref([])
 const loading = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
+const supplierFilter = ref('')
 
 const productsSummaryMap = reactive({})
 const drawerVisible = ref(false)
@@ -262,13 +286,26 @@ const formatTime = (time) => {
   return time ? dayjs(time).format('YYYY-MM-DD HH:mm') : ''
 }
 
+const fetchSuppliers = async () => {
+  try {
+    const res = await supplierApi.getAllSuppliers({ status: 'active' })
+    suppliers.value = res.data
+  } catch (error) {
+    console.error('获取供应商列表失败', error)
+  }
+}
+
 const fetchProducts = async () => {
   loading.value = true
   try {
-    const res = await productApi.getProducts({
+    const params = {
       page: currentPage.value,
       per_page: pageSize.value,
-    })
+    }
+    if (supplierFilter.value) {
+      params.supplier_id = supplierFilter.value
+    }
+    const res = await productApi.getProducts(params)
     products.value = res.data
     total.value = res.meta.total
 
@@ -281,6 +318,11 @@ const fetchProducts = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const handleSearch = () => {
+  currentPage.value = 1
+  fetchProducts()
 }
 
 const fetchProductsSummary = async (productIds) => {
@@ -358,6 +400,7 @@ const handleCurrentChange = () => {
 }
 
 onMounted(() => {
+  fetchSuppliers()
   fetchProducts()
 })
 </script>
@@ -371,6 +414,23 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.filter-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.supplier-name {
+  font-size: 14px;
+  color: #4c6fff;
+  font-weight: 500;
+}
+
+.supplier-empty {
+  font-size: 14px;
+  color: #9ca3af;
 }
 
 .card-header-text {

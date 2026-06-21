@@ -43,6 +43,21 @@ const routes = [
         component: () => import('../views/products/ProductForm.vue'),
       },
       {
+        path: 'suppliers',
+        name: 'Suppliers',
+        component: () => import('../views/suppliers/SupplierList.vue'),
+      },
+      {
+        path: 'suppliers/create',
+        name: 'SupplierCreate',
+        component: () => import('../views/suppliers/SupplierForm.vue'),
+      },
+      {
+        path: 'suppliers/:id/edit',
+        name: 'SupplierEdit',
+        component: () => import('../views/suppliers/SupplierForm.vue'),
+      },
+      {
         path: 'orders',
         name: 'Orders',
         component: () => import('../views/orders/OrderList.vue'),

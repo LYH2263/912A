@@ -22,6 +22,10 @@
             <el-icon><Goods /></el-icon>
             <span>商品管理</span>
           </el-menu-item>
+          <el-menu-item index="/suppliers">
+            <el-icon><OfficeBuilding /></el-icon>
+            <span>供应商管理</span>
+          </el-menu-item>
           <el-menu-item index="/orders">
             <el-icon><Document /></el-icon>
             <span>订单管理</span>
@@ -98,7 +102,7 @@
 <script setup>
 import { computed, onMounted, ref, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataBoard, Goods, Document, Box, Stamp, Bell, ChatDotRound } from '@element-plus/icons-vue'
+import { DataBoard, Goods, Document, Box, Stamp, Bell, ChatDotRound, OfficeBuilding } from '@element-plus/icons-vue'
 import { inventoryAlertApi } from '@/api/modules/inventoryAlert'
 
 const route = useRoute()

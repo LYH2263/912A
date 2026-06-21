@@ -25,7 +25,7 @@ class ProductRepository
 
     public function paginate(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = Product::with('category')
+        $query = Product::with(['category', 'supplier'])
             ->withCount('skus as sku_count')
             ->withMin('skus as min_price', 'price')
             ->withMax('skus as max_price', 'price')
@@ -33,6 +33,10 @@ class ProductRepository
 
         if (isset($filters['category_id'])) {
             $query->where('category_id', $filters['category_id']);
+        }
+
+        if (isset($filters['supplier_id'])) {
+            $query->where('supplier_id', $filters['supplier_id']);
         }
 
         if (isset($filters['status'])) {
@@ -62,12 +66,12 @@ class ProductRepository
 
     public function find(int $id): ?Product
     {
-        return Product::with('category')->find($id);
+        return Product::with(['category', 'supplier'])->find($id);
     }
 
     public function findWithSpecs(int $id): ?Product
     {
-        return Product::with(['category', 'specs.values', 'skus'])->find($id);
+        return Product::with(['category', 'supplier', 'specs.values', 'skus'])->find($id);
     }
 
     public function existsBySku(string $sku, ?int $excludeId = null): bool

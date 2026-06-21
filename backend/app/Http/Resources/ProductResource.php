@@ -20,6 +20,15 @@ class ProductResource extends JsonResource
                     'name' => $this->category->name,
                 ];
             }),
+            'supplier_id' => $this->supplier_id,
+            'supplier' => $this->whenLoaded('supplier', function () {
+                return $this->supplier ? [
+                    'id' => $this->supplier->id,
+                    'name' => $this->supplier->name,
+                    'contact' => $this->supplier->contact,
+                    'phone' => $this->supplier->phone,
+                ] : null;
+            }),
             'description' => $this->description,
             'price' => (float) $this->price,
             'cost_price' => $this->cost_price ? (float) $this->cost_price : null,
