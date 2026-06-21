@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\Product;
 use App\Models\Supplier;
 use App\Repositories\SupplierRepository;
+use Illuminate\Support\Facades\DB;
 
 class SupplierService
 {
@@ -24,10 +26,14 @@ class SupplierService
 
     public function delete(Supplier $supplier): bool
     {
-        if ($supplier->products()->exists()) {
-            return $supplier->delete();
-        }
-        return $supplier->forceDelete();
+        return DB::transaction(function () use ($supplier) {
+            Product::where('supplier_id', $supplier->id)->update(['supplier_id' => null]);
+
+            if ($supplier->products()->exists()) {
+                return $supplier->delete();
+            }
+            return $supplier->forceDelete();
+        });
     }
 
     public function toggleStatus(Supplier $supplier): Supplier

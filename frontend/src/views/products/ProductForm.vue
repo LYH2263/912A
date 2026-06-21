@@ -370,7 +370,11 @@ const formatDateTime = (dateStr) => {
 
 const fetchSuppliers = async () => {
   try {
-    const res = await supplierApi.getAllSuppliers({ status: 'active' })
+    const params = {}
+    if (!isEdit.value || !form.supplier_id) {
+      params.status = 'active'
+    }
+    const res = await supplierApi.getAllSuppliers(params)
     suppliers.value = res.data
   } catch (e) {
     console.error('获取供应商列表失败', e)
@@ -507,6 +511,11 @@ const loadProduct = async () => {
         specData.skus = product.skus || []
       } else {
         enableSpecs.value = false
+      }
+
+      if (form.supplier_id) {
+        const allRes = await supplierApi.getAllSuppliers({})
+        suppliers.value = allRes.data
       }
 
       loadPriceHistories()
