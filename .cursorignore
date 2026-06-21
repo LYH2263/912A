@@ -1,0 +1,20 @@
+﻿# 题目与对话（避免 AI 索引评测材料）
+题目.md
+代码生成.md
+迭代.md
+对话/
+
+# 依赖与构建产物（体积大、无需索引）
+node_modules/
+backend/vendor/
+frontend/dist/
+frontend/dist-ssr/
+
+# 运行时与日志
+*.log
+backend/storage/logs/
+backend/storage/framework/
+
+# 环境变量
+.env
+.env.*
