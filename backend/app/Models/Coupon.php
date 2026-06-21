@@ -35,9 +35,9 @@ class Coupon extends Model
         'expires_at' => 'datetime',
     ];
 
-    public function users(): BelongsToMany
+    public function customers(): BelongsToMany
     {
-        return $this->belongsToMany(User::class, 'coupon_user')
+        return $this->belongsToMany(Customer::class, 'coupon_customer')
             ->withPivot('times_used')
             ->withTimestamps();
     }
@@ -80,7 +80,7 @@ class Coupon extends Model
         return $this->total_quantity > 0 && $this->used_quantity >= $this->total_quantity;
     }
 
-    public function canBeUsedBy(?User $user): bool
+    public function canBeUsedBy(?Customer $customer): bool
     {
         if ($this->status !== 'active') {
             return false;
@@ -94,8 +94,8 @@ class Coupon extends Model
             return false;
         }
 
-        if ($user) {
-            $pivot = $this->users()->where('user_id', $user->id)->first();
+        if ($customer) {
+            $pivot = $this->customers()->where('customer_id', $customer->id)->first();
             if ($pivot && $pivot->pivot->times_used >= $this->per_user_limit) {
                 return false;
             }

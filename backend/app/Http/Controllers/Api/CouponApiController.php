@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CouponResource;
 use App\Models\Coupon;
+use App\Models\Customer;
 use App\Services\CouponService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -101,12 +102,13 @@ class CouponApiController extends Controller
         $validated = $request->validate([
             'coupon_id' => 'required|exists:coupons,id',
             'order_amount' => 'required|numeric|min:0',
+            'customer_id' => 'nullable|exists:customers,id',
         ]);
 
         try {
             $coupon = $this->repository->find($validated['coupon_id']);
-            $user = $request->user();
-            $result = $this->service->validateAndCalculate($coupon, (float) $validated['order_amount'], $user);
+            $customer = isset($validated['customer_id']) ? Customer::find($validated['customer_id']) : null;
+            $result = $this->service->validateAndCalculate($coupon, (float) $validated['order_amount'], $customer);
             return response()->json(['data' => $result]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);

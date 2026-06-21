@@ -132,6 +132,9 @@
               (满 ¥{{ selectedCouponInfo.min_amount.toFixed(2) }} 可用)
             </span>
           </div>
+          <div v-if="calculationError" class="coupon-error">
+            {{ calculationError }}
+          </div>
         </el-form-item>
 
         <el-form-item label="订单金额">
@@ -139,7 +142,7 @@
             <span>商品总额：¥{{ totalAmount.toFixed(2) }}</span>
             <el-divider direction="vertical" />
             <span>优惠券抵扣：
-              <span v-if="form.coupon_id" style="color: #67c23a">-¥{{ couponDiscount.toFixed(2) }}</span>
+              <span v-if="calculationResult && calculationResult.discount_amount > 0" style="color: #67c23a">-¥{{ calculationResult.discount_amount.toFixed(2) }}</span>
               <span v-else style="color: #909399">¥0.00</span>
             </span>
             <el-divider direction="vertical" />
@@ -241,6 +244,9 @@ const customerOptions = ref([])
 const customerSearchLoading = ref(false)
 const customerSearchTimeout = ref(null)
 const selectedCustomerInfo = ref(null)
+const calculationResult = ref(null)
+const calculationError = ref('')
+const calculating = ref(false)
 
 const form = reactive({
   items: [
@@ -319,19 +325,11 @@ const totalAmount = computed(() => {
   return total
 })
 
-const couponDiscount = computed(() => {
-  if (!form.coupon_id) return 0
-  const coupon = availableCoupons.value.find((c) => c.id === form.coupon_id)
-  if (!coupon) return 0
-  if (coupon.min_amount > totalAmount.value) return 0
-  if (coupon.type === 'fixed') {
-    return Math.min(coupon.value, totalAmount.value)
-  }
-  return Math.round(totalAmount.value * (coupon.value / 100) * 100) / 100
-})
-
 const finalAmount = computed(() => {
-  return Math.max(0, totalAmount.value - couponDiscount.value)
+  if (calculationResult.value && calculationResult.value.final_amount !== undefined) {
+    return calculationResult.value.final_amount
+  }
+  return totalAmount.value
 })
 
 const selectedCouponInfo = computed(() => {
@@ -401,25 +399,47 @@ const handleProductChange = async (index) => {
     item.quantity = stock
     ElMessage.warning('数量不能超过库存')
   }
-  calculateTotal()
+  await calculateTotal()
 }
 
-const handleSkuChange = (index) => {
+const handleSkuChange = async (index) => {
   const item = form.items[index]
   const stock = getItemMaxStock(item)
   if (item.quantity > stock) {
     item.quantity = stock
     ElMessage.warning('数量不能超过库存')
   }
-  calculateTotal()
+  await calculateTotal()
 }
 
-const handleCouponChange = () => {
-  if (form.coupon_id) {
-    const coupon = availableCoupons.value.find((c) => c.id === form.coupon_id)
-    if (coupon && coupon.min_amount > totalAmount.value) {
-      ElMessage.warning(`该优惠券需要满 ¥${coupon.min_amount.toFixed(2)} 才可使用`)
-    }
+const handleCouponChange = async () => {
+  calculationError.value = ''
+  await calculateFromServer()
+}
+
+const calculateFromServer = async () => {
+  if (!form.coupon_id) {
+    calculationResult.value = null
+    return
+  }
+  if (totalAmount.value <= 0) {
+    calculationResult.value = null
+    return
+  }
+  calculating.value = true
+  calculationError.value = ''
+  try {
+    const res = await couponApi.calculate({
+      coupon_id: form.coupon_id,
+      order_amount: totalAmount.value,
+      customer_id: form.customer_id || null,
+    })
+    calculationResult.value = res.data
+  } catch (error) {
+    calculationResult.value = null
+    calculationError.value = error.response?.data?.message || '优惠券计算失败'
+  } finally {
+    calculating.value = false
   }
 }
 
@@ -461,6 +481,9 @@ const handleCustomerSelect = async (customerId) => {
     if (!form.shipping_address && res.data.address) {
       form.shipping_address = res.data.address
     }
+    if (form.coupon_id) {
+      await calculateFromServer()
+    }
   } catch (e) {
     console.error('加载客户信息失败', e)
   }
@@ -468,6 +491,9 @@ const handleCustomerSelect = async (customerId) => {
 
 const handleCustomerClear = () => {
   selectedCustomerInfo.value = null
+  if (form.coupon_id) {
+    calculateFromServer()
+  }
 }
 
 const fillCustomerInfo = () => {
@@ -486,15 +512,17 @@ const addItem = () => {
   })
 }
 
-const removeItem = (index) => {
+const removeItem = async (index) => {
   if (form.items.length > 1) {
     form.items.splice(index, 1)
-    calculateTotal()
+    await calculateTotal()
   }
 }
 
-const calculateTotal = () => {
-
+const calculateTotal = async () => {
+  if (form.coupon_id && totalAmount.value > 0) {
+    await calculateFromServer()
+  }
 }
 
 const fetchProducts = async () => {
@@ -518,11 +546,26 @@ const fetchAvailableCoupons = async () => {
 watch(totalAmount, () => {
   if (totalAmount.value > 0) {
     fetchAvailableCoupons()
+    if (form.coupon_id) {
+      calculateFromServer()
+    }
+  } else {
+    calculationResult.value = null
   }
 })
 
 const handleSubmit = async () => {
   if (!formRef.value) return
+
+  if (form.coupon_id && !calculationResult.value) {
+    ElMessage.error('请等待优惠券计算完成')
+    return
+  }
+
+  if (calculationError.value) {
+    ElMessage.error(calculationError.value)
+    return
+  }
 
   await formRef.value.validate(async (valid) => {
     if (!valid) return
@@ -537,7 +580,7 @@ const handleSubmit = async () => {
         })),
         customer_id: form.customer_id || null,
         coupon_id: form.coupon_id || null,
-        discount_amount: couponDiscount.value || 0,
+        discount_amount: calculationResult.value?.discount_amount || 0,
         shipping_name: form.shipping_name,
         shipping_phone: form.shipping_phone,
         shipping_address: form.shipping_address,
@@ -600,6 +643,12 @@ onMounted(() => {
   margin-top: 6px;
   font-size: 13px;
   color: #374151;
+}
+
+.coupon-error {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #f56c6c;
 }
 
 .customer-option {

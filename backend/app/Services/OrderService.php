@@ -71,30 +71,11 @@ class OrderService
                 ];
             }
 
-            $discountAmount = 0;
-            $couponId = null;
-            $user = auth()->user();
-
-            if (!empty($data['coupon_id'])) {
-                $coupon = Coupon::findOrFail($data['coupon_id']);
-                $couponService = app(CouponService::class);
-                $result = $couponService->validateAndCalculate($coupon, $totalAmount, $user);
-                $discountAmount = $result['discount_amount'];
-                $couponId = $coupon->id;
-
-                $couponService->markAsUsed($coupon, $user);
-            } else {
-                $discountAmount = $data['discount_amount'] ?? 0;
-            }
-
-            $finalAmount = $totalAmount - $discountAmount;
-
-            $orderNo = Order::generateOrderNo();
-
             $customerId = $data['customer_id'] ?? null;
             $shippingName = $data['shipping_name'] ?? null;
             $shippingPhone = $data['shipping_phone'] ?? null;
             $shippingAddress = $data['shipping_address'] ?? null;
+            $customer = null;
 
             if (!empty($data['customer_id'])) {
                 $customer = $this->customerRepository->find($data['customer_id']);
@@ -112,6 +93,25 @@ class OrderService
                 );
                 $customerId = $customer->id;
             }
+
+            $discountAmount = 0;
+            $couponId = null;
+
+            if (!empty($data['coupon_id'])) {
+                $coupon = Coupon::findOrFail($data['coupon_id']);
+                $couponService = app(CouponService::class);
+                $result = $couponService->validateAndCalculate($coupon, $totalAmount, $customer);
+                $discountAmount = $result['discount_amount'];
+                $couponId = $coupon->id;
+
+                $couponService->markAsUsed($coupon, $customer);
+            } else {
+                $discountAmount = $data['discount_amount'] ?? 0;
+            }
+
+            $finalAmount = $totalAmount - $discountAmount;
+
+            $orderNo = Order::generateOrderNo();
 
             $order = $this->repository->create([
                 'customer_id' => $customerId,

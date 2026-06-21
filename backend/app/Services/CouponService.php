@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\Coupon;
-use App\Models\User;
+use App\Models\Customer;
 use App\Repositories\CouponRepository;
 use Illuminate\Support\Facades\Log;
 
@@ -48,10 +48,10 @@ class CouponService
         return $coupon->delete();
     }
 
-    public function validateAndCalculate(Coupon $coupon, float $orderAmount, ?User $user = null): array
+    public function validateAndCalculate(Coupon $coupon, float $orderAmount, ?Customer $customer = null): array
     {
-        if (!$coupon->canBeUsedBy($user)) {
-            $reason = $this->getValidationFailureReason($coupon, $user);
+        if (!$coupon->canBeUsedBy($customer)) {
+            $reason = $this->getValidationFailureReason($coupon, $customer);
             throw new \Exception($reason);
         }
 
@@ -68,25 +68,25 @@ class CouponService
         ];
     }
 
-    public function markAsUsed(Coupon $coupon, ?User $user = null): void
+    public function markAsUsed(Coupon $coupon, ?Customer $customer = null): void
     {
         $coupon->increment('used_quantity');
 
-        if ($user) {
-            $existing = $coupon->users()->where('user_id', $user->id)->first();
+        if ($customer) {
+            $existing = $coupon->customers()->where('customer_id', $customer->id)->first();
             if ($existing) {
-                $coupon->users()->updateExistingPivot($user->id, [
+                $coupon->customers()->updateExistingPivot($customer->id, [
                     'times_used' => $existing->pivot->times_used + 1,
                 ]);
             } else {
-                $coupon->users()->attach($user->id, ['times_used' => 1]);
+                $coupon->customers()->attach($customer->id, ['times_used' => 1]);
             }
         }
 
         Log::info('优惠券已使用', [
             'coupon_id' => $coupon->id,
             'code' => $coupon->code,
-            'user_id' => $user?->id,
+            'customer_id' => $customer?->id,
         ]);
     }
 
@@ -121,7 +121,7 @@ class CouponService
         }
     }
 
-    private function getValidationFailureReason(Coupon $coupon, ?User $user): string
+    private function getValidationFailureReason(Coupon $coupon, ?Customer $customer): string
     {
         if ($coupon->status !== 'active') {
             return '优惠券已停用';
@@ -135,8 +135,8 @@ class CouponService
         if ($coupon->isExhausted()) {
             return '优惠券已被领完';
         }
-        if ($user) {
-            $pivot = $coupon->users()->where('user_id', $user->id)->first();
+        if ($customer) {
+            $pivot = $coupon->customers()->where('customer_id', $customer->id)->first();
             if ($pivot && $pivot->pivot->times_used >= $coupon->per_user_limit) {
                 return '已达到该优惠券使用上限';
             }
