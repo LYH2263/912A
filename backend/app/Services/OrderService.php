@@ -225,6 +225,10 @@ class OrderService
             'new_status' => $status,
         ]);
 
+        if ($order->customer_id) {
+            $this->customerService->updateStats(Customer::find($order->customer_id));
+        }
+
         return $order;
     }
 

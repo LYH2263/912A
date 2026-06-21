@@ -472,15 +472,9 @@ const handleCustomerSelect = async (customerId) => {
   try {
     const res = await customerApi.getCustomer(customerId)
     selectedCustomerInfo.value = res.data
-    if (!form.shipping_name) {
-      form.shipping_name = res.data.name
-    }
-    if (!form.shipping_phone) {
-      form.shipping_phone = res.data.phone
-    }
-    if (!form.shipping_address && res.data.address) {
-      form.shipping_address = res.data.address
-    }
+    form.shipping_name = res.data.name
+    form.shipping_phone = res.data.phone
+    form.shipping_address = res.data.address || ''
     if (form.coupon_id) {
       await calculateFromServer()
     }

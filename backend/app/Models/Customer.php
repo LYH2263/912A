@@ -42,8 +42,8 @@ class Customer extends Model
 
     public function updateStats(): void
     {
-        $this->order_count = $this->orders()->count();
-        $this->total_spent = $this->orders()->sum('final_amount') ?: 0;
+        $this->order_count = $this->orders()->where('status', '!=', 'cancelled')->count();
+        $this->total_spent = $this->orders()->where('status', '!=', 'cancelled')->sum('final_amount') ?: 0;
         $this->save();
     }
 }
