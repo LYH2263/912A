@@ -42,6 +42,10 @@
             <el-icon><ChatDotRound /></el-icon>
             <span>评价管理</span>
           </el-menu-item>
+          <el-menu-item index="/returns">
+            <el-icon><Refresh /></el-icon>
+            <span>退换货管理</span>
+          </el-menu-item>
           <el-menu-item index="/alerts">
             <el-badge :value="unreadAlertCount" :max="99" :hidden="unreadAlertCount === 0" class="alert-badge">
               <el-icon><Bell /></el-icon>
@@ -102,7 +106,7 @@
 <script setup>
 import { computed, onMounted, ref, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataBoard, Goods, Document, Box, Stamp, Bell, ChatDotRound, OfficeBuilding } from '@element-plus/icons-vue'
+import { DataBoard, Goods, Document, Box, Stamp, Bell, ChatDotRound, OfficeBuilding, Refresh } from '@element-plus/icons-vue'
 import { inventoryAlertApi } from '@/api/modules/inventoryAlert'
 
 const route = useRoute()

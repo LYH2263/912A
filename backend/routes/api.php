@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\InventoryAlertApiController;
 use App\Http\Controllers\Api\InventoryApiController;
 use App\Http\Controllers\Api\OrderApiController;
 use App\Http\Controllers\Api\ProductApiController;
+use App\Http\Controllers\Api\ReturnApiController;
 use App\Http\Controllers\Api\ReviewApiController;
 use App\Http\Controllers\Api\SupplierApiController;
 use Illuminate\Support\Facades\Route;
@@ -73,5 +74,11 @@ Route::prefix('api')->group(function () {
         Route::post('reviews/{review}/reject', [ReviewApiController::class, 'reject']);
         Route::post('reviews/{review}/toggle-visibility', [ReviewApiController::class, 'toggleVisibility']);
         Route::apiResource('reviews', ReviewApiController::class);
+
+        // 退换货 API
+        Route::apiResource('returns', ReturnApiController::class);
+        Route::post('returns/{return}/approve', [ReturnApiController::class, 'approve']);
+        Route::post('returns/{return}/reject', [ReturnApiController::class, 'reject']);
+        Route::post('returns/{return}/complete', [ReturnApiController::class, 'complete']);
     });
 });

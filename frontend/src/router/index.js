@@ -102,6 +102,16 @@ const routes = [
         name: 'Reviews',
         component: () => import('../views/reviews/ReviewList.vue'),
       },
+      {
+        path: 'returns',
+        name: 'Returns',
+        component: () => import('../views/returns/ReturnList.vue'),
+      },
+      {
+        path: 'returns/:id',
+        name: 'ReturnDetail',
+        component: () => import('../views/returns/ReturnDetail.vue'),
+      },
     ],
   },
 ]
