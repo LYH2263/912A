@@ -9,6 +9,15 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (!Schema::hasTable('product_batches')) {
+            return;
+        }
+
+        $indexExists = collect(DB::select("SHOW INDEX FROM product_batches WHERE Key_name = 'uk_product_batch_no'"))->isNotEmpty();
+        if ($indexExists) {
+            return;
+        }
+
         $duplicates = DB::table('product_batches')
             ->select('product_id', 'batch_no', DB::raw('MIN(id) as keep_id'), DB::raw('COUNT(*) as cnt'))
             ->groupBy('product_id', 'batch_no')

@@ -35,6 +35,12 @@ class InventoryService
         }
     }
 
+    private function notifyStockChange(Product $product): void
+    {
+        $product->refresh();
+        $this->triggerAlert($product);
+    }
+
     public function increaseStock(Product $product, int $quantity, ?int $orderId = null, string $remark = ''): InventoryLog
     {
         return DB::transaction(function () use ($product, $quantity, $orderId, $remark) {
@@ -64,6 +70,8 @@ class InventoryService
                 'before' => $beforeQuantity,
                 'after' => $afterQuantity,
             ]);
+
+            $this->notifyStockChange($product);
 
             return $log;
         });
@@ -102,6 +110,8 @@ class InventoryService
                 'before' => $beforeQuantity,
                 'after' => $afterQuantity,
             ]);
+
+            $this->notifyStockChange($product);
 
             return $log;
         });
@@ -142,6 +152,8 @@ class InventoryService
                 'before' => $beforeQuantity,
                 'after' => $afterQuantity,
             ]);
+
+            $this->notifyStockChange($product);
         });
     }
 
@@ -184,6 +196,8 @@ class InventoryService
                 'before' => $beforeQuantity,
                 'after' => $afterQuantity,
             ]);
+
+            $this->notifyStockChange($product);
         });
     }
 
@@ -243,6 +257,8 @@ class InventoryService
                 'after' => $newQuantity,
             ]);
 
+            $this->notifyStockChange($product);
+
             return $log;
         });
     }
@@ -292,6 +308,8 @@ class InventoryService
                 'product_after' => $productTotalStock,
             ]);
 
+            $this->notifyStockChange($product);
+
             return $log;
         });
     }
@@ -339,6 +357,8 @@ class InventoryService
                 'quantity' => $quantity,
                 'is_sellable' => $batch->is_sellable,
             ]);
+
+            $this->notifyStockChange($product);
 
             return $batch->fresh();
         });
@@ -407,6 +427,8 @@ class InventoryService
                 'batches_used' => count($deductedBatches),
                 'order_id' => $orderId,
             ]);
+
+            $this->notifyStockChange($product);
 
             return [
                 'total_deducted' => $quantity,
@@ -501,6 +523,10 @@ class InventoryService
                 'batches_used' => count($restoredBatches),
             ]);
 
+            if ($batches->isNotEmpty()) {
+                $this->notifyStockChange($product);
+            }
+
             return [
                 'total_restored' => $quantity,
                 'before_quantity' => $totalBefore,
@@ -551,6 +577,8 @@ class InventoryService
                 'product_after' => $productAfter,
             ]);
 
+            $this->notifyStockChange($product);
+
             return $batch->fresh();
         });
     }
@@ -588,6 +616,8 @@ class InventoryService
                 'batch_no' => $batch->batch_no,
                 'quantity' => $beforeQty,
             ]);
+
+            $this->notifyStockChange($product);
 
             return $batch->fresh();
         });

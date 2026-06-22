@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasColumn('inventory_logs', 'product_batch_id')) {
+            return;
+        }
+
         Schema::table('inventory_logs', function (Blueprint $table) {
             $table->unsignedBigInteger('product_batch_id')->nullable()->after('sku_id')->comment('关联批次ID');
 

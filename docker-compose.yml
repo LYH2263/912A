@@ -51,14 +51,42 @@ services:
       - APP_DEBUG=true
       - CACHE_DRIVER=file
       - SESSION_DRIVER=file
+    command: ["/usr/local/bin/docker-entrypoint.sh"]
+
+  # Laravel 定时任务（低库存扫描、批次过期扫描）
+  scheduler:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ecommerce_scheduler
+    restart: always
+    working_dir: /var/www/html
+    volumes:
+      - backend_storage:/var/www/html/storage
+      - backend_cache:/var/www/html/bootstrap/cache
+    depends_on:
+      db:
+        condition: service_started
+      backend:
+        condition: service_started
+    networks:
+      - ecommerce_network
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_DATABASE=ecommerce_db
+      - DB_USERNAME=root
+      - DB_PASSWORD=root
+      - APP_KEY=base64:U1Y0qA9qgM3g9Q3cX3uD1C1CkqQm7JxjY9cQ9n6S3m0=
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - CACHE_DRIVER=file
+      - SESSION_DRIVER=file
     command: >
       sh -c "
-      mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs &&
-      chown -R www-data:www-data storage bootstrap/cache || true &&
       until mysqladmin ping -h"$$DB_HOST" -P"$$DB_PORT" -u"$$DB_USERNAME" -p"$$DB_PASSWORD" --skip-ssl --silent; do echo 'Waiting for database...'; sleep 3; done &&
-      php artisan migrate --force &&
-      php artisan db:seed --force &&
-      php artisan serve --host=0.0.0.0 --port=8000
+      sleep 10 &&
+      php artisan schedule:work
       "
 
   # Vue 前端

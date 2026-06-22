@@ -134,6 +134,9 @@ class ReturnService
 
             if ($return->type === 'return') {
                 $this->restoreInventoryForReturn($return);
+            } elseif ($return->type === 'exchange') {
+                $this->restoreInventoryForReturn($return, '换货退回');
+                $this->deductInventoryForExchange($return);
             }
 
             $return = $this->repository->update($return, [
@@ -171,7 +174,7 @@ class ReturnService
         }
     }
 
-    private function restoreInventoryForReturn(ReturnRequest $return): void
+    private function restoreInventoryForReturn(ReturnRequest $return, string $remark = '退货入库'): void
     {
         $orderItem = $return->orderItem;
         $quantity = $return->quantity;
@@ -187,21 +190,64 @@ class ReturnService
                     ->exists();
 
                 if ($hasBatches) {
-                    $this->inventoryService->restoreStockToBatches($product, $quantity, $orderId, $sku->id, '退货入库');
+                    $this->inventoryService->restoreStockToBatches($product, $quantity, $orderId, $sku->id, $remark);
                 } else {
-                    $this->inventoryService->increaseSkuStock($sku, $quantity, $orderId, '退货入库');
+                    $this->inventoryService->increaseSkuStock($sku, $quantity, $orderId, $remark);
                 }
             }
         } else {
             $product = Product::findOrFail($orderItem->product_id);
 
             $hasBatches = ProductBatch::where('product_id', $product->id)
+                ->whereNull('sku_id')
                 ->exists();
 
             if ($hasBatches) {
-                $this->inventoryService->restoreStockToBatches($product, $quantity, $orderId, null, '退货入库');
+                $this->inventoryService->restoreStockToBatches($product, $quantity, $orderId, null, $remark);
             } else {
-                $this->inventoryService->increaseStock($product, $quantity, $orderId, '退货入库');
+                $this->inventoryService->increaseStock($product, $quantity, $orderId, $remark);
+            }
+        }
+    }
+
+    private function deductInventoryForExchange(ReturnRequest $return): void
+    {
+        $orderItem = $return->orderItem;
+        $quantity = $return->quantity;
+        $orderId = $return->order_id;
+
+        if (!empty($orderItem->product_sku_id)) {
+            $sku = ProductSku::findOrFail($orderItem->product_sku_id);
+            $product = $sku->product;
+
+            $isBatchManaged = ProductBatch::where('product_id', $product->id)
+                ->where('sku_id', $sku->id)
+                ->exists();
+
+            if ($isBatchManaged) {
+                $sellableQty = $this->inventoryService->getProductAvailableBatchStock($product->id, $sku->id);
+                if ($sellableQty < $quantity) {
+                    throw new \Exception("换货出库失败：商品 {$product->name} ({$sku->sku}) 可售批次库存不足，当前可售：{$sellableQty}，需要：{$quantity}");
+                }
+                $this->inventoryService->decreaseStockByFifo($product, $quantity, $orderId, $sku->id, '换货出库');
+            } else {
+                $this->inventoryService->decreaseSkuStock($sku, $quantity, $orderId, '换货出库');
+            }
+        } else {
+            $product = Product::findOrFail($orderItem->product_id);
+
+            $isBatchManaged = ProductBatch::where('product_id', $product->id)
+                ->whereNull('sku_id')
+                ->exists();
+
+            if ($isBatchManaged) {
+                $sellableQty = $this->inventoryService->getProductAvailableBatchStock($product->id);
+                if ($sellableQty < $quantity) {
+                    throw new \Exception("换货出库失败：商品 {$product->name} 可售批次库存不足，当前可售：{$sellableQty}，需要：{$quantity}");
+                }
+                $this->inventoryService->decreaseStockByFifo($product, $quantity, $orderId, null, '换货出库');
+            } else {
+                $this->inventoryService->decreaseStock($product, $quantity, $orderId, '换货出库');
             }
         }
     }

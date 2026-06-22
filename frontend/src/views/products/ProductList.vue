@@ -503,7 +503,7 @@ const formatTime = (time) => {
 
 const fetchSuppliers = async () => {
   try {
-    const res = await supplierApi.getAllSuppliers({ status: 'active' })
+    const res = await supplierApi.getAllSuppliers({})
     suppliers.value = res.data
   } catch (error) {
     console.error('获取供应商列表失败', error)

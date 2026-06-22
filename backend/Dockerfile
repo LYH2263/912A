@@ -59,7 +59,8 @@ COPY . .
 
 # 复制健康检查脚本并设置权限
 COPY healthcheck.sh /usr/local/bin/healthcheck.sh
-RUN chmod +x /usr/local/bin/healthcheck.sh
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/healthcheck.sh /usr/local/bin/docker-entrypoint.sh
 
 # 创建必要的目录并设置权限（仅 chown 可写目录，避免 vendor 递归 chown 极慢）
 RUN mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs \
